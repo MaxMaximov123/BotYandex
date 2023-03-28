@@ -1,8 +1,6 @@
 BETA_TOKEN = "5149866452:AAGx1cymIUtKcOqWwajMOr5RNj7I5QdKlZA"
 REALISE_TOKEN = '5663602666:AAENpFtmuiFjiHLp2BB-yEg3wnqmF2ltw78'
 
-login = "maxss.k2n@yandex.ru"
-pasword = "Blanik2007"
 
 
 headers = {
@@ -16,10 +14,6 @@ headers = {
     'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4'
 }
 
-proxies = {
-    "http": '112.246.105.237:8888',
-    "https": '58.55.254.222:7082'
-}
 
 
 zodiac_signs_links = {

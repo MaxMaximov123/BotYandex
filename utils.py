@@ -7,7 +7,7 @@ class States(Helper):
     WELCOME_STATE = ListItem()
     MENU_STATE = ListItem()
     CHOOSING_HOROSCOPE = ListItem()
-    TEST_STATE_3 = ListItem()
+    CURRENCY = ListItem()
     TEST_STATE_4 = ListItem()
     TEST_STATE_5 = ListItem()
 

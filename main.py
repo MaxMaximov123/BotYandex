@@ -1,19 +1,24 @@
 import requests
 from aiogram import Bot, types
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher import Dispatcher
-from aiogram.utils import executor
+from aiogram.dispatcher.filters import Text
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.dispatcher.filters import FiltersFactory
 import config
 from utils import States
 from db import BotDB
+from callbacks import *
 import asyncio
-from collectors import horoscope
+from collectors import horoscope, currency
 
 bot = Bot(token=config.REALISE_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
+filters = FiltersFactory(dp)
 
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
@@ -26,7 +31,7 @@ async def menu(message, text='Вы в меню'):
 	btn3 = types.KeyboardButton(text="Новости📰")
 	btn5 = types.KeyboardButton(text="Инвестиции📈")
 	btn4 = types.KeyboardButton(text="Настройки⚙")
-	kb = [[btn1, btn2, btn3, btn5, btn4]]
+	kb = [[btn1, btn2, btn3], [btn5, btn4]]
 	markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=kb)
 	await message.answer(text, reply_markup=markup)
 	await state.set_state(States.MENU_STATE[0])
@@ -146,6 +151,18 @@ async def first_test_state_case_met(message: types.Message):
 		BotDB.update_status(message.chat.id, "news")
 	if message.text == "Курсы валют💰":
 		BotDB.update_status(message.chat.id, "curr")
+		curr = currency.get()
+		btns = [[
+			types.InlineKeyboardButton(
+				text="Другая валюта",
+				callback_data="other_currency")
+		]]
+		builder = InlineKeyboardMarkup(inline_keyboard=btns)
+		await message.answer(
+			f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
+			f"{curr['EUR']['name']} (EUR): {curr['EUR']['val']}₽",
+			reply_markup=builder)
+		await state.set_state(States.MENU_STATE[0])
 	if message.text == "Настройки⚙":
 		BotDB.update_status(message.chat.id, "settings")
 
@@ -158,6 +175,46 @@ async def choosing_horoscope(message: types.Message):
 		await message.answer(horoscope.get(config.zodiac_signs_links[message.text])[0])
 		for i in horoscope.get(config.zodiac_signs_links[message.text])[1]:
 			await message.answer(i.text)
+	else:
+		await message.answer("Я не понимаю")
+
+
+@dp.callback_query_handler(text_contains='other_currency')
+async def send_random_value(callback: types.CallbackQuery):
+	print(999)
+	curr = currency.get()
+	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
+	btns = []
+	for i in range(0, len(keys) - 1, 2):
+		btns.append([
+			types.InlineKeyboardButton(
+				text=f"{curr[keys[i]]['name']} ({keys[i]})",
+				callback_data=f"curr_{keys[i]}"),
+			types.InlineKeyboardButton(
+				text=f"{curr[keys[i + 1]]['name']} ({keys[i + 1]})",
+				callback_data=f"curr_{keys[i + 1]}"),
+			])
+	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	await callback.message.answer(
+		"Выберите валюу:",
+		reply_markup=builder)
+
+
+@dp.callback_query_handler(text_contains='curr_')
+async def send_random_value(callback: types.CallbackQuery):
+	builder = InlineKeyboardMarkup()
+	curr = currency.get()
+	key = callback.data.split('_')[1]
+	print(key)
+	builder.add(types.InlineKeyboardButton(
+		text="Другая валюта",
+		callback_data="other_currency")
+	)
+	await callback.message.answer(
+		f"{curr[key]['name']} ({key}): {curr[key]['val']}₽\n",
+		reply_markup=builder)
+	await bot.delete_message(callback.message.chat.id, callback.message.message_id)
+
 
 
 @dp.message_handler(state="*")
