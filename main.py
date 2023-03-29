@@ -49,8 +49,11 @@ async def send_news(message, topic, article):
 		skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
 		det = types.InlineKeyboardButton(text='Подробнее', url=ALL_NEWS[topic][article]['url'])
 		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
-		with open(f'data/news_images/{ALL_NEWS[topic][article]["img"].split("/")[-2]}.jpg', 'rb') as photo:
-			await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'], reply_markup=markup)
+		if ALL_NEWS[topic][article]["img"]:
+			with open(f'data/news_images/{ALL_NEWS[topic][article]["img"].split("/")[-2]}.jpg', 'rb') as photo:
+				await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'], reply_markup=markup)
+		else:
+			await bot.send_message(message.chat.id, ALL_NEWS[topic][article]['title'], reply_markup=markup)
 		await BotDB.update_article(message.chat.id, article + 1)
 	else:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
@@ -243,12 +246,11 @@ async def choosing_horoscope(message: types.Message):
 		await message.answer("Я не понимаю")
 
 
-@dp.callback_query_handler(text_contains='curr_')
+@dp.callback_query_handler(state=States.MENU_STATE, text_contains='curr_')
 async def curr_(callback: types.CallbackQuery):
 	builder = InlineKeyboardMarkup()
 	curr = currency.get()
 	key = callback.data.split('_')[1]
-	print(key)
 	builder.add(types.InlineKeyboardButton(
 		text="Другая валюта",
 		callback_data="other_currency")
@@ -259,7 +261,7 @@ async def curr_(callback: types.CallbackQuery):
 	await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
 
-@dp.callback_query_handler(text_contains='other_currency')
+@dp.callback_query_handler(state=States.MENU_STATE, text_contains='other_currency')
 async def other_currency(callback: types.CallbackQuery):
 	curr = currency.get()
 	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
