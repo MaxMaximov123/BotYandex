@@ -149,6 +149,46 @@ async def first_test_state_case_met(message: types.Message):
 
 	if message.text == "Новости📰":
 		BotDB.update_status(message.chat.id, "news")
+
+		home = types.KeyboardButton(text="Меню↩")
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
+		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
+		btn_0 = types.InlineKeyboardButton(
+			text='Глвное❗', callback_data="https://dzen.ru/news")
+		btn_1 = types.InlineKeyboardButton(
+			ext='Казань🕌', callback_data="https://dzen.ru/news/region/kazan")
+		btn_2 = types.InlineKeyboardButton(
+			text='Коронавирус🦠',
+			callback_data="https://dzen.ru/news/rubric/koronavirus")
+		btn_3 = types.InlineKeyboardButton(
+			text='Политика🇺🇳', callback_data="https://dzen.ru/news/rubric/politics")
+		btn_4 = types.InlineKeyboardButton(
+			text='Экономика📈', callback_data="https://dzen.ru/news/rubric/business")
+		btn_5 = types.InlineKeyboardButton(
+			text='Спорт⚽️',
+			callback_data="https://dzen.ru/sport?utm_source=yxnews&utm_medium=desktop")
+		btn_6 = types.InlineKeyboardButton(
+			text='Происшествия🚨',
+			callback_data="https://dzen.ru/news/rubric/incident")
+		btn_7 = types.InlineKeyboardButton(
+			text='Культура🎨', callback_data="https://dzen.ru/news/rubric/culture")
+		btn_8 = types.InlineKeyboardButton(
+			text='Технологии💻', callback_data="https://dzen.ru/news/rubric/computers")
+		kb = [
+			[btn_0],
+			[btn_1],
+			[btn_2],
+			[btn_3],
+			[btn_4],
+			[btn_5],
+			[btn_6],
+			[btn_7],
+			[btn_8]
+		]
+		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+		await message.answer("Выберите тему", reply_markup=markup)
+		await state.set_state(States.CHOOSING_CATEGORIES_NEWS[0])
+
 	if message.text == "Курсы валют💰":
 		BotDB.update_status(message.chat.id, "curr")
 		curr = currency.get()
@@ -179,27 +219,6 @@ async def choosing_horoscope(message: types.Message):
 		await message.answer("Я не понимаю")
 
 
-@dp.callback_query_handler(text_contains='other_currency')
-async def send_random_value(callback: types.CallbackQuery):
-	print(999)
-	curr = currency.get()
-	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
-	btns = []
-	for i in range(0, len(keys) - 1, 2):
-		btns.append([
-			types.InlineKeyboardButton(
-				text=f"{curr[keys[i]]['name']} ({keys[i]})",
-				callback_data=f"curr_{keys[i]}"),
-			types.InlineKeyboardButton(
-				text=f"{curr[keys[i + 1]]['name']} ({keys[i + 1]})",
-				callback_data=f"curr_{keys[i + 1]}"),
-			])
-	builder = InlineKeyboardMarkup(inline_keyboard=btns)
-	await callback.message.answer(
-		"Выберите валюу:",
-		reply_markup=builder)
-
-
 @dp.callback_query_handler(text_contains='curr_')
 async def send_random_value(callback: types.CallbackQuery):
 	builder = InlineKeyboardMarkup()
@@ -215,6 +234,30 @@ async def send_random_value(callback: types.CallbackQuery):
 		reply_markup=builder)
 	await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
+
+@dp.callback_query_handler(text_contains='other_currency')
+async def send_random_value(callback: types.CallbackQuery):
+	curr = currency.get()
+	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
+	btns = []
+	for i in range(0, len(keys) - 1, 2):
+		btns.append([
+			types.InlineKeyboardButton(
+				text=f"{curr[keys[i]]['name']} ({keys[i]})",
+				callback_data=f"curr_{keys[i]}"),
+			types.InlineKeyboardButton(
+				text=f"{curr[keys[i + 1]]['name']} ({keys[i + 1]})",
+				callback_data=f"curr_{keys[i + 1]}"),
+		])
+	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	await callback.message.answer(
+		"Выберите валюу:",
+		reply_markup=builder)
+
+
+@dp.callback_query_handler(state=States.CHOOSING_CATEGORIES_NEWS)
+async def send_random_value(callback: types.CallbackQuery):
+	print(callback.data)
 
 
 @dp.message_handler(state="*")

@@ -8,7 +8,7 @@ class States(Helper):
     MENU_STATE = ListItem()
     CHOOSING_HOROSCOPE = ListItem()
     CURRENCY = ListItem()
-    TEST_STATE_4 = ListItem()
+    CHOOSING_CATEGORIES_NEWS = ListItem()
     TEST_STATE_5 = ListItem()
 
 
