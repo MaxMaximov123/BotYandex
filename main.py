@@ -1,9 +1,15 @@
+from pprint import pprint
+
 import requests
 from aiogram import Bot, types
+import json
+import time
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher.filters import Text
+from threading import Thread
+from schedule import every, run_pending
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.filters import FiltersFactory
@@ -13,19 +19,20 @@ from db import BotDB
 from callbacks import *
 import asyncio
 from collectors import horoscope, currency
+from collectors import news
 
 bot = Bot(token=config.REALISE_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
 filters = FiltersFactory(dp)
-
+ALL_NEWS = {}
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
 
 async def menu(message, text='Вы в меню'):
 	state = dp.current_state(user=message.from_user.id)
-	BotDB.update_status(message.from_user.id, "menu")
+	await BotDB.update_status(message.from_user.id, "menu")
 	btn1 = types.KeyboardButton(text="Гороскопы🪐")
 	btn2 = types.KeyboardButton(text="Курсы валют💰")
 	btn3 = types.KeyboardButton(text="Новости📰")
@@ -37,18 +44,35 @@ async def menu(message, text='Вы в меню'):
 	await state.set_state(States.MENU_STATE[0])
 
 
+async def send_news(message, topic, article):
+	if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
+		skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
+		det = types.InlineKeyboardButton(text='Подробнее', url=ALL_NEWS[topic][article]['url'])
+		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
+		with open(f'data/news_images/{ALL_NEWS[topic][article]["img"].split("/")[-2]}.jpg', 'rb') as photo:
+			await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'], reply_markup=markup)
+		await BotDB.update_article(message.chat.id, article + 1)
+	else:
+		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
+			[
+				types.KeyboardButton(text="⬅Назад"),
+				types.KeyboardButton(text="Меню↩")]
+		])
+		await message.answer("Новости на эту тему закончились", reply_markup=markup)
+
+
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
 	state = dp.current_state(user=message.from_user.id)
-	if (message.chat.id,) not in BotDB.get_id() or 1:
+	if (message.chat.id,) not in await BotDB.get_id() or 1:
 		await message.answer(
 			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
-		if not BotDB.user_exists(message.chat.id):
-			BotDB.add_user(
+		if not await BotDB.user_exists(message.chat.id):
+			await BotDB.add_user(
 				message.chat.id, "welcome", f'{message.from_user.first_name}',
 				message.from_user.username, "pass", '123')
 		else:
-			BotDB.update_status(message.chat.id, "welcome")
+			await BotDB.update_status(message.chat.id, "welcome")
 
 		await state.set_state(States.WELCOME_STATE[0])
 
@@ -65,7 +89,7 @@ async def welcome(message: types.Message):
 	except ValueError as e:
 		await message.answer("Введены невенрные данные, попробуйте еще раз")
 		return
-	BotDB.add_birth(message.chat.id, message.text)
+	await BotDB.add_birth(message.chat.id, message.text)
 	if len(data) == 2 and 0 < data[0] < 32 and 0 < data[1] < 13:
 		znak = "Овен"
 		if (21 <= data[0] <= 31 and data[1] == 3) or (data[1] == 4 and 1 <= data[0] <= 19):
@@ -104,8 +128,8 @@ async def welcome(message: types.Message):
 			znak = zodiac_signs[11]
 
 		await message.answer(f"А вы знали, что Вы {znak}?")
-		BotDB.update_status(message.chat.id, "pass")
-		BotDB.update_znak(message.chat.id, znak)
+		await BotDB.update_status(message.chat.id, "pass")
+		await BotDB.update_znak(message.chat.id, znak)
 		await menu(
 			message,
 			"Теперь каждое утро в 8 часов вы будете получать актуальный гороскоп, новости и курс валют.")
@@ -115,13 +139,13 @@ async def welcome(message: types.Message):
 
 
 @dp.message_handler(state=States.MENU_STATE)
-async def first_test_state_case_met(message: types.Message):
+async def choosing_in_menu(message: types.Message):
 	state = dp.current_state(user=message.from_user.id)
 	if message.text == 'Инвестиции📈':
-		BotDB.update_status(message.chat.id, "invest")
+		await BotDB.update_status(message.chat.id, "invest")
 
 	if message.text == "Гороскопы🪐":
-		BotDB.update_status(message.chat.id, "horoscope")
+		await BotDB.update_status(message.chat.id, "horoscope")
 		btn1 = types.KeyboardButton(text=zodiac_signs[0])
 		btn2 = types.KeyboardButton(text=zodiac_signs[1])
 		btn3 = types.KeyboardButton(text=zodiac_signs[2])
@@ -148,7 +172,7 @@ async def first_test_state_case_met(message: types.Message):
 		await state.set_state(States.CHOOSING_HOROSCOPE[0])
 
 	if message.text == "Новости📰":
-		BotDB.update_status(message.chat.id, "news")
+		await BotDB.update_status(message.chat.id, "news")
 
 		home = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
@@ -156,7 +180,7 @@ async def first_test_state_case_met(message: types.Message):
 		btn_0 = types.InlineKeyboardButton(
 			text='Глвное❗', callback_data="https://dzen.ru/news")
 		btn_1 = types.InlineKeyboardButton(
-			ext='Казань🕌', callback_data="https://dzen.ru/news/region/kazan")
+			text='Казань🕌', callback_data="https://dzen.ru/news/region/kazan")
 		btn_2 = types.InlineKeyboardButton(
 			text='Коронавирус🦠',
 			callback_data="https://dzen.ru/news/rubric/koronavirus")
@@ -187,10 +211,10 @@ async def first_test_state_case_met(message: types.Message):
 		]
 		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 		await message.answer("Выберите тему", reply_markup=markup)
-		await state.set_state(States.CHOOSING_CATEGORIES_NEWS[0])
+		await state.set_state(States.READING_NEWS[0])
 
 	if message.text == "Курсы валют💰":
-		BotDB.update_status(message.chat.id, "curr")
+		await BotDB.update_status(message.chat.id, "curr")
 		curr = currency.get()
 		btns = [[
 			types.InlineKeyboardButton(
@@ -204,7 +228,7 @@ async def first_test_state_case_met(message: types.Message):
 			reply_markup=builder)
 		await state.set_state(States.MENU_STATE[0])
 	if message.text == "Настройки⚙":
-		BotDB.update_status(message.chat.id, "settings")
+		await BotDB.update_status(message.chat.id, "settings")
 
 
 @dp.message_handler(state=States.CHOOSING_HOROSCOPE)
@@ -220,7 +244,7 @@ async def choosing_horoscope(message: types.Message):
 
 
 @dp.callback_query_handler(text_contains='curr_')
-async def send_random_value(callback: types.CallbackQuery):
+async def curr_(callback: types.CallbackQuery):
 	builder = InlineKeyboardMarkup()
 	curr = currency.get()
 	key = callback.data.split('_')[1]
@@ -236,7 +260,7 @@ async def send_random_value(callback: types.CallbackQuery):
 
 
 @dp.callback_query_handler(text_contains='other_currency')
-async def send_random_value(callback: types.CallbackQuery):
+async def other_currency(callback: types.CallbackQuery):
 	curr = currency.get()
 	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
 	btns = []
@@ -255,18 +279,64 @@ async def send_random_value(callback: types.CallbackQuery):
 		reply_markup=builder)
 
 
-@dp.callback_query_handler(state=States.CHOOSING_CATEGORIES_NEWS)
-async def send_random_value(callback: types.CallbackQuery):
-	print(callback.data)
+@dp.callback_query_handler(state=States.READING_NEWS)
+async def choosing_categories_news(callback: types.CallbackQuery):
+	if callback.data == 'skip':
+		await send_news(
+			callback.message,
+			await BotDB.get_topic(callback.message.chat.id),
+			await BotDB.get_article(callback.message.chat.id))
+	else:
+		await BotDB.update_topic(callback.message.from_user.id, callback.data)
+		markup = types.ReplyKeyboardMarkup(
+			resize_keyboard=True, keyboard=[
+				[
+					types.KeyboardButton(text="⬅Назад"),
+					types.KeyboardButton(text="Меню↩")]
+			]
+		)
+		await callback.message.answer("Нажмите 'назад', чтобы сменить тему", reply_markup=markup)
+		await BotDB.update_article(callback.message.chat.id, 0)
+		await BotDB.update_topic(callback.message.chat.id, callback.data)
+		await send_news(callback.message, callback.data, 0)
+		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
 
-@dp.message_handler(state="*")
+@dp.message_handler(state=States.READING_NEWS)
+async def reading_news(message: types.Message):
+	if message.text == "⬅Назад":
+		message1 = message
+		message1.text = 'Новости📰'
+		await choosing_in_menu(message1)
+	elif message.text == "Меню↩":
+		await menu(message)
+
+
+@dp.message_handler()
 async def all_cmd(message: types.Message):
 	await menu(message)
 
 
+async def save_all():
+	global ALL_NEWS
+	# await news.save_all_news()
+	with open('data/news_data.json', encoding='utf-8') as json_file:
+		ALL_NEWS = json.load(json_file)
+
+
+async def work():
+	while True:
+		run_pending()
+		await asyncio.sleep(1)
+
+
+every(5).minutes.do(save_all)
+
+
 # Запуск процесса поллинга новых апдейтов
 async def main():
+	await save_all()
+	asyncio.create_task(work())
 	await dp.start_polling(bot)
 
 

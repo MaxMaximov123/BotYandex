@@ -8,9 +8,10 @@ class States(Helper):
     MENU_STATE = ListItem()
     CHOOSING_HOROSCOPE = ListItem()
     CURRENCY = ListItem()
-    CHOOSING_CATEGORIES_NEWS = ListItem()
-    TEST_STATE_5 = ListItem()
+    READING_NEWS = ListItem()
+    STATE = ListItem()
+
 
 
 if __name__ == '__main__':
-    print(States.all()[0] == States.MENU_STATE[0])
+    print(States.all())

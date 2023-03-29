@@ -11,7 +11,7 @@ async def save_img(url):
     try:
         img_data = requests.get(url).content
         path = url.split('/')[-2]
-        with open(f'../data/news_images/{path}.jpg', 'wb') as handler:
+        with open(f'data/news_images/{path}.jpg', 'wb') as handler:
             handler.write(img_data)
     except Exception as e:
         print(e)
@@ -46,7 +46,7 @@ async def get_news(url):
 
 
 async def save_all_news():
-    with open('../data/news_data.json', encoding='utf-8') as json_file:
+    with open('data/news_data.json', encoding='utf-8') as json_file:
         data = json.load(json_file)
     tasks = []
 
@@ -55,7 +55,7 @@ async def save_all_news():
 
     for url, dt in tqdm(await asyncio.gather(*tasks)):
         data[url] = dt
-    with open('../data/news_data.json', 'w', encoding='utf-8') as f:
+    with open('data/news_data.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
