@@ -51,9 +51,10 @@ async def send_news(message, topic, article):
 		det = types.InlineKeyboardButton(text='Подробнее', url=ALL_NEWS[topic][article]['url'])
 		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
 		if ALL_NEWS[topic][article]["img"]:
-			with open(f'data/news_images/{ALL_NEWS[topic][article]["img"].split("/")[-2]}.jpg', 'rb') as photo:
-				await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'],
-									 reply_markup=markup)
+			await bot.send_photo(
+				message.chat.id, photo=ALL_NEWS[topic][article]["img"],
+				caption=ALL_NEWS[topic][article]['title'],
+				reply_markup=markup)
 		else:
 			await bot.send_message(message.chat.id, ALL_NEWS[topic][article]['title'], reply_markup=markup)
 		await BotDB.update_article(message.chat.id, article + 1)
