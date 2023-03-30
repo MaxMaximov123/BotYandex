@@ -1,8 +1,9 @@
 from pprint import pprint
-
+import os
 import requests
 from aiogram import Bot, types
 import json
+import concurrent.futures
 import time
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.callback_data import CallbackData
@@ -51,7 +52,8 @@ async def send_news(message, topic, article):
 		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
 		if ALL_NEWS[topic][article]["img"]:
 			with open(f'data/news_images/{ALL_NEWS[topic][article]["img"].split("/")[-2]}.jpg', 'rb') as photo:
-				await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'], reply_markup=markup)
+				await bot.send_photo(message.chat.id, photo, caption=ALL_NEWS[topic][article]['title'],
+									 reply_markup=markup)
 		else:
 			await bot.send_message(message.chat.id, ALL_NEWS[topic][article]['title'], reply_markup=markup)
 		await BotDB.update_article(message.chat.id, article + 1)
@@ -180,38 +182,7 @@ async def choosing_in_menu(message: types.Message):
 		home = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
-		btn_0 = types.InlineKeyboardButton(
-			text='Глвное❗', callback_data="https://dzen.ru/news")
-		btn_1 = types.InlineKeyboardButton(
-			text='Казань🕌', callback_data="https://dzen.ru/news/region/kazan")
-		btn_2 = types.InlineKeyboardButton(
-			text='Коронавирус🦠',
-			callback_data="https://dzen.ru/news/rubric/koronavirus")
-		btn_3 = types.InlineKeyboardButton(
-			text='Политика🇺🇳', callback_data="https://dzen.ru/news/rubric/politics")
-		btn_4 = types.InlineKeyboardButton(
-			text='Экономика📈', callback_data="https://dzen.ru/news/rubric/business")
-		btn_5 = types.InlineKeyboardButton(
-			text='Спорт⚽️',
-			callback_data="https://dzen.ru/sport?utm_source=yxnews&utm_medium=desktop")
-		btn_6 = types.InlineKeyboardButton(
-			text='Происшествия🚨',
-			callback_data="https://dzen.ru/news/rubric/incident")
-		btn_7 = types.InlineKeyboardButton(
-			text='Культура🎨', callback_data="https://dzen.ru/news/rubric/culture")
-		btn_8 = types.InlineKeyboardButton(
-			text='Технологии💻', callback_data="https://dzen.ru/news/rubric/computers")
-		kb = [
-			[btn_0],
-			[btn_1],
-			[btn_2],
-			[btn_3],
-			[btn_4],
-			[btn_5],
-			[btn_6],
-			[btn_7],
-			[btn_8]
-		]
+		kb = [[types.InlineKeyboardButton(text=text, callback_data=url)] for text, url in config.NEWS_URLS.items()]
 		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 		await message.answer("Выберите тему", reply_markup=markup)
 		await state.set_state(States.READING_NEWS[0])
@@ -319,28 +290,33 @@ async def all_cmd(message: types.Message):
 	await menu(message)
 
 
-async def save_all():
+def save_all():
 	global ALL_NEWS
-	# await news.save_all_news()
-	with open('data/news_data.json', encoding='utf-8') as json_file:
-		ALL_NEWS = json.load(json_file)
+	data = news.save_all_news()
+	if data:
+		ALL_NEWS = data
+	else:
+		with open('data/news_data.json', encoding='utf-8') as json_file:
+			ALL_NEWS = json.load(json_file)
 
 
-async def work():
+def work():
 	while True:
 		run_pending()
-		await asyncio.sleep(1)
-
-
-every(5).minutes.do(save_all)
+		time.sleep(1)
 
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
-	await save_all()
-	asyncio.create_task(work())
+	tr1 = Thread(target=work)
+	tr1.start()
+	tr = Thread(target=save_all)
+	tr.start()
+	every(10).minutes.do(save_all)
 	await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
+	if os.name == 'nt':
+		asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 	asyncio.run(main())
