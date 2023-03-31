@@ -9,7 +9,7 @@ class States(Helper):
     CHOOSING_HOROSCOPE = ListItem()
     CURRENCY = ListItem()
     READING_NEWS = ListItem()
-    STATE = ListItem()
+    SETTINGS = ListItem()
 
 
 
