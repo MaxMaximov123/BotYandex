@@ -10,10 +10,10 @@ import logging
 
 path_ = ''
 LOG_LEVEL = logging.INFO
-LOGFORMAT = "  %(levelname)-4s | %(message)s"
+LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
 logging.basicConfig(
 	level=logging.INFO,
-	format=LOGFORMAT
+	format=LOGFORMAT,
 )
 
 data = {}
@@ -34,7 +34,6 @@ def get_news(url):
 	r = requests.get(url + '?issue_tld=ru&utm_referrer=dzen.ru', headers=config.HEADERS_TO_NEWS)
 	html = BS(r.text, "html.parser")
 	html = html.find_all(class_="mg-card")
-	logging.info('Saving Block News')
 	for i, block in enumerate(html):
 		try:
 			news_data = {

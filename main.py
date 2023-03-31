@@ -3,11 +3,13 @@ import os
 import requests
 from aiogram import Bot, types
 import json
+import pyshorteners
 import concurrent.futures
 import time
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher import Dispatcher
+from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from threading import Thread
 from schedule import every, run_pending
@@ -31,6 +33,10 @@ ALL_NEWS = {}
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
 
+def shorten_url(url):
+	return pyshorteners.Shortener().clckru.short(url)
+
+
 async def menu(message, text='Вы в меню'):
 	state = dp.current_state(user=message.from_user.id)
 	await BotDB.update_status(message.from_user.id, "menu")
@@ -48,7 +54,7 @@ async def menu(message, text='Вы в меню'):
 async def send_news(message, topic, article):
 	if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
 		skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
-		det = types.InlineKeyboardButton(text='Подробнее', url=ALL_NEWS[topic][article]['url'])
+		det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
 		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
 		if ALL_NEWS[topic][article]["img"]:
 			await bot.send_photo(
@@ -68,9 +74,8 @@ async def send_news(message, topic, article):
 
 
 @dp.message_handler(commands=['start'])
-async def cmd_start(message: types.Message):
-	state = dp.current_state(user=message.from_user.id)
-	if (message.chat.id,) not in await BotDB.get_id() or 1:
+async def cmd_start(message: types.Message, state: FSMContext):
+	if (message.chat.id,) not in await BotDB.get_id():
 		await message.answer(
 			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
 		if not await BotDB.user_exists(message.chat.id):
@@ -88,8 +93,7 @@ async def cmd_start(message: types.Message):
 
 
 @dp.message_handler(state=States.WELCOME_STATE)
-async def welcome(message: types.Message):
-	state = dp.current_state(user=message.from_user.id)
+async def welcome(message: types.Message, state: FSMContext):
 	try:
 		data = list(map(int, message.text.split(".")))
 	except ValueError as e:
@@ -145,8 +149,7 @@ async def welcome(message: types.Message):
 
 
 @dp.message_handler(state=States.MENU_STATE)
-async def choosing_in_menu(message: types.Message):
-	state = dp.current_state(user=message.from_user.id)
+async def choosing_in_menu(message: types.Message, state: FSMContext):
 	if message.text == 'Инвестиции📈':
 		await BotDB.update_status(message.chat.id, "invest")
 
@@ -189,6 +192,10 @@ async def choosing_in_menu(message: types.Message):
 		await state.set_state(States.READING_NEWS[0])
 
 	if message.text == "Курсы валют💰":
+		home = types.KeyboardButton(text="Меню↩")
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
+		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
+
 		await BotDB.update_status(message.chat.id, "curr")
 		curr = currency.get()
 		btns = [[
@@ -201,13 +208,14 @@ async def choosing_in_menu(message: types.Message):
 			f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
 			f"{curr['EUR']['name']} (EUR): {curr['EUR']['val']}₽",
 			reply_markup=builder)
-		await state.set_state(States.MENU_STATE[0])
+		await state.set_state(States.CURRENCY[0])
+
 	if message.text == "Настройки⚙":
 		await BotDB.update_status(message.chat.id, "settings")
 
 
 @dp.message_handler(state=States.CHOOSING_HOROSCOPE)
-async def choosing_horoscope(message: types.Message):
+async def choosing_horoscope(message: types.Message, state: FSMContext):
 	if message.text == 'Меню↩':
 		await menu(message)
 	elif message.text in zodiac_signs:
@@ -218,8 +226,14 @@ async def choosing_horoscope(message: types.Message):
 		await message.answer("Я не понимаю")
 
 
-@dp.callback_query_handler(state=States.MENU_STATE, text_contains='curr_')
-async def curr_(callback: types.CallbackQuery):
+@dp.message_handler(state=States.CURRENCY)
+async def choosing_curr(message: types.Message, state: FSMContext):
+	if message.text == 'Меню↩':
+		await menu(message)
+
+
+@dp.callback_query_handler(state=States.CURRENCY, text_contains='curr_')
+async def curr_(callback: types.CallbackQuery, state: FSMContext):
 	builder = InlineKeyboardMarkup()
 	curr = currency.get()
 	key = callback.data.split('_')[1]
@@ -233,8 +247,8 @@ async def curr_(callback: types.CallbackQuery):
 	await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
 
-@dp.callback_query_handler(state=States.MENU_STATE, text_contains='other_currency')
-async def other_currency(callback: types.CallbackQuery):
+@dp.callback_query_handler(state=States.CURRENCY, text_contains='other_currency')
+async def other_currency(callback: types.CallbackQuery, state: FSMContext):
 	curr = currency.get()
 	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
 	btns = []
@@ -254,7 +268,7 @@ async def other_currency(callback: types.CallbackQuery):
 
 
 @dp.callback_query_handler(state=States.READING_NEWS)
-async def choosing_categories_news(callback: types.CallbackQuery):
+async def choosing_categories_news(callback: types.CallbackQuery, state: FSMContext):
 	if callback.data == 'skip':
 		await send_news(
 			callback.message,
@@ -277,7 +291,7 @@ async def choosing_categories_news(callback: types.CallbackQuery):
 
 
 @dp.message_handler(state=States.READING_NEWS)
-async def reading_news(message: types.Message):
+async def reading_news(message: types.Message, state: FSMContext):
 	if message.text == "⬅Назад":
 		message1 = message
 		message1.text = 'Новости📰'
@@ -287,8 +301,17 @@ async def reading_news(message: types.Message):
 
 
 @dp.message_handler()
-async def all_cmd(message: types.Message):
-	await menu(message)
+async def all_cmd(message: types.Message, state: FSMContext):
+	states = {
+		'welcome': (States.WELCOME_STATE[0], welcome),
+		'menu': (States.MENU_STATE[0], choosing_in_menu),
+		'horoscope': (States.CHOOSING_HOROSCOPE[0], choosing_horoscope),
+		'curr': (States.CURRENCY[0], choosing_curr),
+		'news': (States.READING_NEWS[0], reading_news),
+	}
+	st = states[await BotDB.get_status(message.chat.id)]
+	await state.set_state(st[0])
+	await st[1](message, state)
 
 
 def save_all():
