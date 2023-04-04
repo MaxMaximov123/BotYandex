@@ -4,12 +4,20 @@ import asyncio
 
 class BotDB:
 	def __init__(self):
-		self.conn = psycopg2.connect(
+		self.conn1 = psycopg2.connect(
 			user="postgres",
 			password="ccYPnfvO7LXKaf93Fbeu",
 			host="containers-us-west-17.railway.app",
 			port="7535",
 			database="railway")
+
+		self.conn = psycopg2.connect(
+			user="botyandexdb_user",
+			password="ZVUmhSnT7b77IRQGg2ALSulV8LX6hmAp",
+			host="dpg-cgm6imorddl8uv83d40g-a",
+			port="5432",
+			database="botyandexdb")
+
 		self.cursor = self.conn.cursor()
 
 		query = '''SELECT EXISTS (SELECT relname FROM pg_class WHERE relname = 'trackers');'''
