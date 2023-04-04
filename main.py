@@ -1,25 +1,19 @@
-from pprint import pprint
 import os
-import requests
 from aiogram import Bot, types
 import json
 import pyshorteners
-import concurrent.futures
 import time
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.utils.callback_data import CallbackData
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Text
 from threading import Thread
 from schedule import every, run_pending
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher.filters import FiltersFactory
-import config
-from utils import States
-from db import BotDB
-from callbacks import *
+from scripts import config
+from scripts.utils import States
+from scripts.db import BotDB
 import asyncio
 from collectors import horoscope, currency
 from collectors import news

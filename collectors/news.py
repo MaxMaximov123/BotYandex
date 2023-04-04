@@ -1,9 +1,7 @@
 import requests
-import config
+from scripts import config
 from bs4 import BeautifulSoup as BS
-from tqdm import tqdm
 import json
-from pprint import pprint
 from threading import Thread
 import asyncio
 import logging
