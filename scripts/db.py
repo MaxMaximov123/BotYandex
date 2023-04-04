@@ -6,10 +6,10 @@ class BotDB:
 	def __init__(self):
 		self.conn = psycopg2.connect(
 			user="postgres",
-			password="Blanik 2007",
-			host="localhost",
-			port="5432",
-			database="NewsBot_TG")
+			password="ccYPnfvO7LXKaf93Fbeu",
+			host="containers-us-west-17.railway.app",
+			port="7535",
+			database="railway")
 		self.cursor = self.conn.cursor()
 
 		query = '''SELECT EXISTS (SELECT relname FROM pg_class WHERE relname = 'trackers');'''
@@ -18,7 +18,7 @@ class BotDB:
 		if not rows[0]:
 			self.create_table()
 
-	async def create_table(self):
+	def create_table(self):
 		try:
 			create_table_query1 = '''CREATE TABLE trackers(
 USER_ID	BIGINT,
