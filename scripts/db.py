@@ -11,7 +11,12 @@ class BotDB:
 			port="5432",
 			database="NewsBot_TG")
 		self.cursor = self.conn.cursor()
-		# self.create_table()
+
+		query = '''SELECT EXISTS (SELECT relname FROM pg_class WHERE relname = 'trackers');'''
+		resp = self.cursor.execute(query)
+		rows = self.cursor.fetchone()
+		if not rows[0]:
+			self.create_table()
 
 	async def create_table(self):
 		try:
