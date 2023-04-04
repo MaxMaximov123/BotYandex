@@ -11,12 +11,12 @@ class BotDB:
 			port="7535",
 			database="railway")
 
-		self.conn1 = psycopg2.connect(
-			user="botyandexdb_user",
-			password="ZVUmhSnT7b77IRQGg2ALSulV8LX6hmAp",
-			host="dpg-cgm6imorddl8uv83d40g-a",
-			port="5432",
-			database="botyandexdb")
+		# self.conn1 = psycopg2.connect(
+		# 	user="botyandexdb_user",
+		# 	password="ZVUmhSnT7b77IRQGg2ALSulV8LX6hmAp",
+		# 	host="dpg-cgm6imorddl8uv83d40g-a",
+		# 	port="5432",
+		# 	database="botyandexdb")
 
 		self.cursor = self.conn.cursor()
 
