@@ -1,8 +1,10 @@
+import logging
 import os
 from aiogram import Bot, types
 import json
 import pyshorteners
 import time
+import datetime
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
@@ -18,7 +20,7 @@ import asyncio
 from collectors import horoscope, currency
 from collectors import news
 
-bot = Bot(token=config.REALISE_TOKEN)
+bot = Bot(token=config.BETA_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -31,9 +33,34 @@ def shorten_url(url):
 	return pyshorteners.Shortener().clckru.short(url)
 
 
+async def send_curr(user_id):
+	curr = currency.get()
+	btns = [[
+		types.InlineKeyboardButton(
+			text="Другая валюта",
+			callback_data="other_currency")
+	]]
+	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	await bot.send_message(
+		user_id,
+		f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
+		f"{curr['EUR']['name']} (EUR): {curr['EUR']['val']}₽",
+		reply_markup=builder)
+
+
+async def birthday(user_id):
+	day = str(int(datetime.date.today().strftime('%d')))
+	month = str(int(datetime.date.today().strftime('%m')))
+	data = '.'.join([day, month])
+	if BotDB.get_birth(user_id) == data:
+		await bot.send_message(
+			user_id,
+			"Дорогой пользователь, поздравляю Вас с днем рождения, спасибо, что Вы с нами!🥳")
+
+
 async def menu(message, text='Вы в меню'):
 	state = dp.current_state(user=message.from_user.id)
-	await BotDB.update_status(message.from_user.id, "menu")
+	BotDB.update_status(message.from_user.id, "menu")
 	btn1 = types.KeyboardButton(text="Гороскопы🪐")
 	btn2 = types.KeyboardButton(text="Курсы валют💰")
 	btn3 = types.KeyboardButton(text="Новости📰")
@@ -45,26 +72,58 @@ async def menu(message, text='Вы в меню'):
 	await state.set_state(States.MENU_STATE[0])
 
 
-async def send_news(message, topic, article):
+async def start_mailing():
+	for user_id, in BotDB.get_id():
+		try:
+			await birthday(user_id)
+			true_modes = BotDB.get_modes(user_id)
+			modes = true_modes.split(';')
+			if modes:
+				await bot.send_message(user_id, "Утренние новости☕️📰:")
+				if '2' in modes:
+					znak = BotDB.get_znak(user_id)
+					if znak in config.zodiac_signs_links:
+						await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
+						for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
+							await bot.send_message(user_id, j.text)
+					else:
+						await bot.send_message(
+							user_id,
+							"Вы не указали вашу дату рождения для гороскопа.")
+				if '3' in modes:
+					await send_curr(user_id)
+
+				if '1' in modes:
+					for num in range(len(ALL_NEWS['https://dzen.ru/news'][:6])):
+						await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
+
+		except Exception as e:
+			print(e)
+
+
+async def send_news(user_id, topic, article, skip_btn=True):
 	if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
 		skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
 		det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
-		markup = types.InlineKeyboardMarkup(inline_keyboard=[[skip, det]])
+		key_b = [[skip, det]] if skip_btn else [[det]]
+
+		emoj = dict([tuple(reversed(i)) for i in config.NEWS_URLS.items()])[topic][-1]
+		markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
 		if ALL_NEWS[topic][article]["img"]:
 			await bot.send_photo(
-				message.chat.id, photo=ALL_NEWS[topic][article]["img"],
-				caption=ALL_NEWS[topic][article]['title'],
+				user_id, photo=ALL_NEWS[topic][article]["img"],
+				caption=emoj + ' ' + ALL_NEWS[topic][article]['title'],
 				reply_markup=markup)
 		else:
-			await bot.send_message(message.chat.id, ALL_NEWS[topic][article]['title'], reply_markup=markup)
-		await BotDB.update_article(message.chat.id, article + 1)
+			await bot.send_message(user_id, emoj + ' ' + ALL_NEWS[topic][article]['title'], reply_markup=markup)
+		BotDB.update_article(user_id, article + 1)
 	else:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
 			[
 				types.KeyboardButton(text="⬅Назад"),
 				types.KeyboardButton(text="Меню↩")]
 		])
-		await message.answer("Новости на эту тему закончились", reply_markup=markup)
+		await bot.send_message(user_id, "Новости на эту тему закончились", reply_markup=markup)
 
 
 async def settings_btns(modes):
@@ -92,15 +151,15 @@ async def settings_btns(modes):
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message, state: FSMContext):
-	if (message.chat.id,) not in await BotDB.get_id():
+	if (message.chat.id,) not in BotDB.get_id():
 		await message.answer(
 			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
-		if not await BotDB.user_exists(message.chat.id):
-			await BotDB.add_user(
+		if not BotDB.user_exists(message.chat.id):
+			BotDB.add_user(
 				message.chat.id, "welcome", f'{message.from_user.first_name}',
 				message.from_user.username, "pass", '1;2;3')
 		else:
-			await BotDB.update_status(message.chat.id, "welcome")
+			BotDB.update_status(message.chat.id, "welcome")
 
 		await state.set_state(States.WELCOME_STATE[0])
 
@@ -116,7 +175,7 @@ async def welcome(message: types.Message, state: FSMContext):
 	except ValueError as e:
 		await message.answer("Введены невенрные данные, попробуйте еще раз")
 		return
-	await BotDB.add_birth(message.chat.id, message.text)
+	BotDB.add_birth(message.chat.id, message.text)
 	if len(data) == 2 and 0 < data[0] < 32 and 0 < data[1] < 13:
 		znak = "Овен"
 		if (21 <= data[0] <= 31 and data[1] == 3) or (data[1] == 4 and 1 <= data[0] <= 19):
@@ -155,8 +214,8 @@ async def welcome(message: types.Message, state: FSMContext):
 			znak = zodiac_signs[11]
 
 		await message.answer(f"А вы знали, что Вы {znak}?")
-		await BotDB.update_status(message.chat.id, "pass")
-		await BotDB.update_znak(message.chat.id, znak)
+		BotDB.update_status(message.chat.id, "pass")
+		BotDB.update_znak(message.chat.id, znak)
 		await menu(
 			message,
 			"Теперь каждое утро в 8 часов вы будете получать актуальный гороскоп, новости и курс валют.")
@@ -168,10 +227,10 @@ async def welcome(message: types.Message, state: FSMContext):
 @dp.message_handler(state=States.MENU_STATE)
 async def choosing_in_menu(message: types.Message, state: FSMContext):
 	if message.text == 'Инвестиции📈':
-		await BotDB.update_status(message.chat.id, "invest")
+		BotDB.update_status(message.chat.id, "invest")
 
 	if message.text == "Гороскопы🪐":
-		await BotDB.update_status(message.chat.id, "horoscope")
+		BotDB.update_status(message.chat.id, "horoscope")
 		btn1 = types.KeyboardButton(text=zodiac_signs[0])
 		btn2 = types.KeyboardButton(text=zodiac_signs[1])
 		btn3 = types.KeyboardButton(text=zodiac_signs[2])
@@ -198,7 +257,7 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		await state.set_state(States.CHOOSING_HOROSCOPE[0])
 
 	if message.text == "Новости📰":
-		await BotDB.update_status(message.chat.id, "news")
+		BotDB.update_status(message.chat.id, "news")
 
 		home = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
@@ -213,28 +272,20 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
 
-		await BotDB.update_status(message.chat.id, "curr")
-		curr = currency.get()
-		btns = [[
-			types.InlineKeyboardButton(
-				text="Другая валюта",
-				callback_data="other_currency")
-		]]
-		builder = InlineKeyboardMarkup(inline_keyboard=btns)
-		await message.answer(
-			f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
-			f"{curr['EUR']['name']} (EUR): {curr['EUR']['val']}₽",
-			reply_markup=builder)
+		BotDB.update_status(message.chat.id, "curr")
+
+		await send_curr(message.chat.id)
+
 		await state.set_state(States.CURRENCY[0])
 
 	if message.text == "Настройки⚙":
-		await BotDB.update_status(message.chat.id, "settings")
+		BotDB.update_status(message.chat.id, "settings")
 		back = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[back]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
-		modes = await BotDB.get_modes(message.chat.id)
+		modes = BotDB.get_modes(message.chat.id)
 		if ';' not in modes:
-			await BotDB.update_modes(message.chat.id, '1;2;3')
+			BotDB.update_modes(message.chat.id, '1;2;3')
 			modes = '1;2;3'
 		modes = modes.split(';')
 		await message.answer("Выберите категории рассылки", reply_markup=await settings_btns(modes))
@@ -267,7 +318,7 @@ async def settings(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(state=States.SETTINGS)
 async def set_mode(callback: types.CallbackQuery, state: FSMContext):
-	true_modes = await BotDB.get_modes(callback.message.chat.id)
+	true_modes = BotDB.get_modes(callback.message.chat.id)
 	modes = true_modes.split(';')
 	if 'not_mode' in callback.data:
 		modes.remove(callback.data.split(' ')[1])
@@ -275,7 +326,7 @@ async def set_mode(callback: types.CallbackQuery, state: FSMContext):
 		modes.append(callback.data.split(' ')[1])
 	markup = await settings_btns(modes)
 	modes = ';'.join(list(set(modes)))
-	await BotDB.update_modes(callback.message.chat.id, modes)
+	BotDB.update_modes(callback.message.chat.id, modes)
 	await bot.edit_message_reply_markup(
 		chat_id=callback.message.chat.id,
 		message_id=callback.message.message_id,
@@ -311,8 +362,8 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 			])
 		btns.append([
 			types.InlineKeyboardButton(
-					text=f">>",
-					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+				text=f">>",
+				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
 		])
 		builder = InlineKeyboardMarkup(inline_keyboard=btns)
 		await callback.message.answer(
@@ -337,23 +388,23 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 		if slice_[0] <= 0:
 			row = [
 				types.InlineKeyboardButton(
-						text=f">>",
-						callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+					text=f">>",
+					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
 			]
 		elif len(keys) < slice_[1]:
 			row = [
 				types.InlineKeyboardButton(
-						text="<<",
-						callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
+					text="<<",
+					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
 			]
 		else:
 			row = [
 				types.InlineKeyboardButton(
-						text="<<",
-						callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
+					text="<<",
+					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
 				types.InlineKeyboardButton(
-						text=f">>",
-						callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+					text=f">>",
+					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
 			]
 
 		btns.append(row)
@@ -368,11 +419,11 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 async def choosing_categories_news(callback: types.CallbackQuery, state: FSMContext):
 	if callback.data == 'skip':
 		await send_news(
-			callback.message,
-			await BotDB.get_topic(callback.message.chat.id),
-			await BotDB.get_article(callback.message.chat.id))
+			callback.message.chat.id,
+			BotDB.get_topic(callback.message.chat.id),
+			BotDB.get_article(callback.message.chat.id))
 	else:
-		await BotDB.update_topic(callback.message.from_user.id, callback.data)
+		BotDB.update_topic(callback.message.from_user.id, callback.data)
 		markup = types.ReplyKeyboardMarkup(
 			resize_keyboard=True, keyboard=[
 				[
@@ -381,9 +432,9 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 			]
 		)
 		await callback.message.answer("Нажмите 'назад', чтобы сменить тему", reply_markup=markup)
-		await BotDB.update_article(callback.message.chat.id, 0)
-		await BotDB.update_topic(callback.message.chat.id, callback.data)
-		await send_news(callback.message, callback.data, 0)
+		BotDB.update_article(callback.message.chat.id, 0)
+		BotDB.update_topic(callback.message.chat.id, callback.data)
+		await send_news(callback.message.chat.id, callback.data, 0)
 		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
 
@@ -407,7 +458,7 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'news': (States.READING_NEWS[0], reading_news),
 		'settings': (States.SETTINGS[0], settings)
 	}
-	st = states[await BotDB.get_status(message.chat.id)]
+	st = states[BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
 	await st[1](message, state)
 
@@ -430,11 +481,11 @@ def work():
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
-	tr1 = Thread(target=work)
-	tr1.start()
-	tr = Thread(target=save_all)
-	tr.start()
+	Thread(target=work).start()
+	Thread(target=save_all).start()
+
 	every(10).minutes.do(save_all)
+	every().day.at("05:00").do(start_mailing)
 	await dp.start_polling(bot)
 
 
