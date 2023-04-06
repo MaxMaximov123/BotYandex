@@ -27,18 +27,18 @@ zodiac_signs_links = {
 
 NEWS_URLS = {
 	'Глвное❗': "https://dzen.ru/news",
+	'Мир🌏': 'https://dzen.ru/news/rubric/world',
+	'Экономика📈': "https://dzen.ru/news/rubric/business",
+	'Политика🇺🇳': "https://dzen.ru/news/rubric/politics",
+	'Происшествия🚨': "https://dzen.ru/news/rubric/incident",
+	'Казань🕌': "https://dzen.ru/news/region/kazan",
+	'Технологии💻': "https://dzen.ru/news/rubric/computers",
+	'Спорт⚽️': "https://dzen.ru/news/rubric/sport",
 	'МоскваⓂ': 'https://dzen.ru/news/region/moscow',
 	'Интересное❔': 'https://dzen.ru/news/rubric/personal_feed',
-	'Казань🕌': "https://dzen.ru/news/region/kazan",
 	'Коронавирус🦠': "https://dzen.ru/news/rubric/koronavirus",
 	'Общество👥': 'https://dzen.ru/news/rubric/society',
-	'Политика🇺🇳': "https://dzen.ru/news/rubric/politics",
-	'Экономика📈': "https://dzen.ru/news/rubric/business",
-	'Мир🌏': 'https://dzen.ru/news/rubric/world',
-	'Спорт⚽️': "https://dzen.ru/news/rubric/sport",
-	'Происшествия🚨': "https://dzen.ru/news/rubric/incident",
 	'Культура🎨': "https://dzen.ru/news/rubric/culture",
-	'Технологии💻': "https://dzen.ru/news/rubric/computers",
 	'Авто🚗': 'https://dzen.ru/news/rubric/auto'
 }
 

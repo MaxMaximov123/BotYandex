@@ -521,8 +521,8 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
 			]
 
-		btns.append(row)
-		builder = InlineKeyboardMarkup(inline_keyboard=btns)
+		kb.append(row)
+		builder = InlineKeyboardMarkup(inline_keyboard=kb)
 		await bot.edit_message_reply_markup(
 			callback.message.chat.id,
 			callback.message.message_id,
