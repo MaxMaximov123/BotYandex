@@ -22,7 +22,7 @@ import functools
 from collectors import horoscope, currency
 from collectors import news
 
-bot = Bot(token=config.BETA_TOKEN)
+bot = Bot(token=config.REALISE_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -104,11 +104,11 @@ async def send_mail(user_id):
 					await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
 
 	except exceptions.BotBlocked:
-		logging.warning("Bot blocked by user")
+		logging.warning(f"Bot blocked by user {user_id}")
 	except exceptions.ChatNotFound:
-		logging.warning("Chat not found")
+		logging.warning(f"Chat not found {user_id}")
 	except exceptions.UserDeactivated:
-		logging.warning("User is deactivated")
+		logging.warning(f"User {user_id} is deactivated")
 	except exceptions.TelegramAPIError:
 		logging.warning("Telegram API error occurred")
 	except Exception as e:
@@ -133,7 +133,7 @@ async def send_news(user_id, topic, article, skip_btn=True):
 		det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
 		key_b = [[skip, det]] if skip_btn else [[det]]
 
-		emoj = dict([tuple(reversed(i)) for i in config.NEWS_URLS.items()])[topic][-1]
+		emoj = config.REV_NEWS_URLS[topic][-1]
 		markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
 		if ALL_NEWS[topic][article]["img"]:
 			await bot.send_photo(
@@ -288,7 +288,25 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		home = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
-		kb = [[types.InlineKeyboardButton(text=text, callback_data=url)] for text, url in config.NEWS_URLS.items()]
+		slice_ = (0, 8)
+		step = 8
+
+		kb = []
+		btns = list(config.NEWS_URLS.items())[slice_[0]:slice_[1]]
+		for i in range(0, len(btns) - 1, 2):
+			kb.append([
+				types.InlineKeyboardButton(
+					text=btns[i][0],
+					callback_data=btns[i][1]),
+				types.InlineKeyboardButton(
+					text=btns[i + 1][0],
+					callback_data=btns[i + 1][1]),
+			])
+		kb.append([
+			types.InlineKeyboardButton(
+				text=f">>",
+				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+		])
 		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 		await message.answer("Выберите тему", reply_markup=markup)
 		await state.set_state(States.READING_NEWS[0])
@@ -404,7 +422,6 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 		curr = currency.get()
 		keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
 		btns = []
-		print(slice_)
 		for i in keys[slice_[0]:slice_[1]]:
 			btns.append([
 				types.InlineKeyboardButton(
@@ -443,12 +460,14 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(state=States.READING_NEWS)
 async def choosing_categories_news(callback: types.CallbackQuery, state: FSMContext):
+	print(callback.data)
+
 	if callback.data == 'skip':
 		await send_news(
 			callback.message.chat.id,
 			BotDB.get_topic(callback.message.chat.id),
 			BotDB.get_article(callback.message.chat.id))
-	else:
+	elif callback.data in config.REV_NEWS_URLS:
 		BotDB.update_topic(callback.message.from_user.id, callback.data)
 		markup = types.ReplyKeyboardMarkup(
 			resize_keyboard=True, keyboard=[
@@ -462,6 +481,52 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 		BotDB.update_topic(callback.message.chat.id, callback.data)
 		await send_news(callback.message.chat.id, callback.data, 0)
 		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
+
+	elif 'slice_' in callback.data:
+		slice_ = [
+			int(callback.data.split('_')[1]),
+			int(callback.data.split('_')[2])
+		]
+		step = 8
+		kb = []
+		btns = list(config.NEWS_URLS.items())[slice_[0]:slice_[1]]
+		for i in range(0, len(btns) - 1, 2):
+			kb.append([
+				types.InlineKeyboardButton(
+					text=btns[i][0],
+					callback_data=btns[i][1]),
+				types.InlineKeyboardButton(
+					text=btns[i + 1][0],
+					callback_data=btns[i + 1][1]),
+			])
+		if slice_[0] <= 0:
+			row = [
+				types.InlineKeyboardButton(
+					text=f">>",
+					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+			]
+		elif len(btns) < slice_[1]:
+			row = [
+				types.InlineKeyboardButton(
+					text="<<",
+					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
+			]
+		else:
+			row = [
+				types.InlineKeyboardButton(
+					text="<<",
+					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
+				types.InlineKeyboardButton(
+					text=f">>",
+					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+			]
+
+		btns.append(row)
+		builder = InlineKeyboardMarkup(inline_keyboard=btns)
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=builder)
 
 
 @dp.message_handler(state=States.READING_NEWS)
