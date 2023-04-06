@@ -1,5 +1,9 @@
+import datetime
+
 BETA_TOKEN = "5149866452:AAGx1cymIUtKcOqWwajMOr5RNj7I5QdKlZA"
 REALISE_TOKEN = '5663602666:AAENpFtmuiFjiHLp2BB-yEg3wnqmF2ltw78'
+
+SEND_TIME = datetime.time(hour=5, minute=0, second=0)
 
 
 

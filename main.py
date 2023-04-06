@@ -8,6 +8,7 @@ import datetime
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
+from aiogram.utils import exceptions
 from threading import Thread
 from schedule import every, run_pending
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -17,10 +18,11 @@ from scripts import config
 from scripts.utils import States
 from scripts.db import BotDB
 import asyncio
+import functools
 from collectors import horoscope, currency
 from collectors import news
 
-bot = Bot(token=config.REALISE_TOKEN)
+bot = Bot(token=config.BETA_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -33,14 +35,19 @@ def shorten_url(url):
 	return pyshorteners.Shortener().clckru.short(url)
 
 
-async def send_curr(user_id):
+def event_starter(func):
+	if not func.is_running():
+		func.start()
+
+
+async def send_curr(user_id, btn=True):
 	curr = currency.get()
 	btns = [[
 		types.InlineKeyboardButton(
 			text="Другая валюта",
 			callback_data="other_currency")
 	]]
-	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	builder = InlineKeyboardMarkup(inline_keyboard=btns if btn else None)
 	await bot.send_message(
 		user_id,
 		f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
@@ -72,33 +79,52 @@ async def menu(message, text='Вы в меню'):
 	await state.set_state(States.MENU_STATE[0])
 
 
+async def send_mail(user_id):
+	try:
+		await birthday(user_id)
+		true_modes = BotDB.get_modes(user_id)
+		modes = true_modes.split(';')
+		if modes:
+			await bot.send_message(user_id, "Утренние новости☕️📰:")
+			if '2' in modes:
+				znak = BotDB.get_znak(user_id)
+				if znak in config.zodiac_signs_links:
+					await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
+					for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
+						await bot.send_message(user_id, j.text)
+				else:
+					await bot.send_message(
+						user_id,
+						"Вы не указали вашу дату рождения для гороскопа.")
+			if '3' in modes:
+				await send_curr(user_id, btn=False)
+
+			if '1' in modes:
+				for num in range(len(ALL_NEWS['https://dzen.ru/news'][:6])):
+					await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
+
+	except exceptions.BotBlocked:
+		logging.warning("Bot blocked by user")
+	except exceptions.ChatNotFound:
+		logging.warning("Chat not found")
+	except exceptions.UserDeactivated:
+		logging.warning("User is deactivated")
+	except exceptions.TelegramAPIError:
+		logging.warning("Telegram API error occurred")
+	except Exception as e:
+		logging.warning(f"Error occurred: {e}")
+
+
 async def start_mailing():
-	for user_id, in BotDB.get_id():
-		try:
-			await birthday(user_id)
-			true_modes = BotDB.get_modes(user_id)
-			modes = true_modes.split(';')
-			if modes:
-				await bot.send_message(user_id, "Утренние новости☕️📰:")
-				if '2' in modes:
-					znak = BotDB.get_znak(user_id)
-					if znak in config.zodiac_signs_links:
-						await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
-						for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
-							await bot.send_message(user_id, j.text)
-					else:
-						await bot.send_message(
-							user_id,
-							"Вы не указали вашу дату рождения для гороскопа.")
-				if '3' in modes:
-					await send_curr(user_id)
+	now = datetime.datetime.now().time().replace(microsecond=0, second=0)
 
-				if '1' in modes:
-					for num in range(len(ALL_NEWS['https://dzen.ru/news'][:6])):
-						await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
+	if now == config.SEND_TIME:
+		logging.info('start mailing')
+		tasks = []
+		for user_id, in BotDB.get_id():
+			tasks.append(asyncio.create_task(send_mail(user_id)))
+		await asyncio.gather(*tasks)
 
-		except Exception as e:
-			print(e)
 
 
 async def send_news(user_id, topic, article, skip_btn=True):
@@ -464,6 +490,11 @@ async def all_cmd(message: types.Message, state: FSMContext):
 
 
 def save_all():
+	t1 = Thread(target=save_news)
+	t1.start()
+
+
+def save_news():
 	global ALL_NEWS
 	data = news.save_all_news()
 	if data:
@@ -473,21 +504,29 @@ def save_all():
 			ALL_NEWS = json.load(json_file)
 
 
-def work():
+async def work():
 	while True:
+		await start_mailing()
 		run_pending()
-		time.sleep(1)
+		await asyncio.sleep(30)
+
+
+def thread_func(func):
+	t = Thread(target=func)
+	t.start()
 
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
-	Thread(target=work).start()
-	Thread(target=save_all).start()
-
+	save_all()
 	every(10).minutes.do(save_all)
-	every().day.at("06:55").do(asyncio.run, start_mailing())
-	await dp.start_polling(bot)
 
+
+	tasks = [
+		asyncio.create_task(dp.start_polling(bot)),
+		asyncio.create_task(work())
+	]
+	await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
 	if os.name == 'nt':
