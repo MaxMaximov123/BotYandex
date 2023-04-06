@@ -485,7 +485,7 @@ async def main():
 	Thread(target=save_all).start()
 
 	every(10).minutes.do(save_all)
-	every().day.at("06:25").do(lambda: asyncio.run(start_mailing()))
+	every().day.at("06:25").do(asyncio.run, start_mailing())
 	await dp.start_polling(bot)
 
 
