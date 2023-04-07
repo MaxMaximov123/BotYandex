@@ -48,10 +48,14 @@ async def send_curr(user_id, btn=True):
 			callback_data="other_currency")
 	]]
 	builder = InlineKeyboardMarkup(inline_keyboard=btns if btn else None)
+	curr_list = await BotDB.get_curr(user_id)
+	curr_list = curr_list.split(';')
+	msg_text = ''
+	for i in curr_list:
+		msg_text += f"{curr[i]['name']} ({i}): {curr[i]['val']}₽\n"
 	await bot.send_message(
 		user_id,
-		f"{curr['USD']['name']} (USD): {curr['USD']['val']}₽\n"
-		f"{curr['EUR']['name']} (EUR): {curr['EUR']['val']}₽",
+		msg_text,
 		reply_markup=builder)
 
 
@@ -59,7 +63,7 @@ async def birthday(user_id):
 	day = str(int(datetime.date.today().strftime('%d')))
 	month = str(int(datetime.date.today().strftime('%m')))
 	data = '.'.join([day, month])
-	if BotDB.get_birth(user_id) == data:
+	if await BotDB.get_birth(user_id) == data:
 		await bot.send_message(
 			user_id,
 			"Дорогой пользователь, поздравляю Вас с днем рождения, спасибо, что Вы с нами!🥳")
@@ -67,7 +71,7 @@ async def birthday(user_id):
 
 async def menu(message, text='Вы в меню'):
 	state = dp.current_state(user=message.from_user.id)
-	BotDB.update_status(message.from_user.id, "menu")
+	await BotDB.update_status(message.from_user.id, "menu")
 	btn1 = types.KeyboardButton(text="Гороскопы🪐")
 	btn2 = types.KeyboardButton(text="Курсы валют💰")
 	btn3 = types.KeyboardButton(text="Новости📰")
@@ -82,12 +86,12 @@ async def menu(message, text='Вы в меню'):
 async def send_mail(user_id):
 	try:
 		await birthday(user_id)
-		true_modes = BotDB.get_modes(user_id)
+		true_modes = await BotDB.get_modes(user_id)
 		modes = true_modes.split(';')
 		if modes:
 			await bot.send_message(user_id, "Утренние новости☕️📰:")
 			if '2' in modes:
-				znak = BotDB.get_znak(user_id)
+				znak = await BotDB.get_znak(user_id)
 				if znak in config.zodiac_signs_links:
 					await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
 					for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
@@ -95,7 +99,7 @@ async def send_mail(user_id):
 				else:
 					await bot.send_message(
 						user_id,
-						"Вы не указали вашу дату рождения для гороскопа.")
+						"Вы не указали вашу дату рождения для гороскопа, чтобы указать ее введите /age")
 			if '3' in modes:
 				await send_curr(user_id, btn=False)
 
@@ -121,7 +125,7 @@ async def start_mailing():
 	if now == config.SEND_TIME:
 		logging.info('start mailing')
 		tasks = []
-		for user_id, in BotDB.get_id():
+		for user_id, in await BotDB.get_id():
 			tasks.append(asyncio.create_task(send_mail(user_id)))
 		await asyncio.gather(*tasks)
 
@@ -142,7 +146,7 @@ async def send_news(user_id, topic, article, skip_btn=True):
 				reply_markup=markup)
 		else:
 			await bot.send_message(user_id, emoj + ' ' + ALL_NEWS[topic][article]['title'], reply_markup=markup)
-		BotDB.update_article(user_id, article + 1)
+		await BotDB.update_article(user_id, article + 1)
 	else:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
 			[
@@ -175,23 +179,42 @@ async def settings_btns(modes):
 	return markup
 
 
-@dp.message_handler(commands=['start'])
+@dp.message_handler(commands=['start'], state='*')
 async def cmd_start(message: types.Message, state: FSMContext):
-	if (message.chat.id,) not in BotDB.get_id():
+	if (message.chat.id,) not in await BotDB.get_id():
 		await message.answer(
 			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
-		if not BotDB.user_exists(message.chat.id):
-			BotDB.add_user(
-				message.chat.id, "welcome", f'{message.from_user.first_name}',
-				message.from_user.username, "pass", '1;2;3')
+		if not await BotDB.user_exists(message.chat.id):
+			await BotDB.add_user(
+				message.chat.id,
+				"welcome",
+				f'{message.from_user.first_name}',
+				message.from_user.username,
+				"pass",
+				'1;2;3',
+				'USD;EUR'
+			)
 		else:
-			BotDB.update_status(message.chat.id, "welcome")
+			await BotDB.update_status(message.chat.id, "welcome")
 
 		await state.set_state(States.WELCOME_STATE[0])
 
 	else:
-		await message.answer("Я тебя помню")
+		await message.answer("Я тебя помню, если хочешь изменить дату рождения, введи команду /age")
 		await menu(message, 'Вы в меню')
+
+
+@dp.message_handler(commands=['age'], state='*')
+async def age(message: types.Message, state: FSMContext):
+	await message.answer(
+		f'{message.from_user.first_name}, Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
+	if not await BotDB.user_exists(message.chat.id):
+		await BotDB.add_user(
+			message.chat.id, "welcome", f'{message.from_user.first_name}',
+			message.from_user.username, "pass", '1;2;3')
+	else:
+		await BotDB.update_status(message.chat.id, "welcome")
+		await state.set_state(States.WELCOME_STATE[0])
 
 
 @dp.message_handler(state=States.WELCOME_STATE)
@@ -201,7 +224,7 @@ async def welcome(message: types.Message, state: FSMContext):
 	except ValueError as e:
 		await message.answer("Введены невенрные данные, попробуйте еще раз")
 		return
-	BotDB.add_birth(message.chat.id, message.text)
+	await BotDB.add_birth(message.chat.id, message.text)
 	if len(data) == 2 and 0 < data[0] < 32 and 0 < data[1] < 13:
 		znak = "Овен"
 		if (21 <= data[0] <= 31 and data[1] == 3) or (data[1] == 4 and 1 <= data[0] <= 19):
@@ -240,8 +263,8 @@ async def welcome(message: types.Message, state: FSMContext):
 			znak = zodiac_signs[11]
 
 		await message.answer(f"А вы знали, что Вы {znak}?")
-		BotDB.update_status(message.chat.id, "pass")
-		BotDB.update_znak(message.chat.id, znak)
+		await BotDB.update_status(message.chat.id, "pass")
+		await BotDB.update_znak(message.chat.id, znak)
 		await menu(
 			message,
 			"Теперь каждое утро в 8 часов вы будете получать актуальный гороскоп, новости и курс валют.")
@@ -253,10 +276,10 @@ async def welcome(message: types.Message, state: FSMContext):
 @dp.message_handler(state=States.MENU_STATE)
 async def choosing_in_menu(message: types.Message, state: FSMContext):
 	if message.text == 'Инвестиции📈':
-		BotDB.update_status(message.chat.id, "invest")
+		await BotDB.update_status(message.chat.id, "invest")
 
 	if message.text == "Гороскопы🪐":
-		BotDB.update_status(message.chat.id, "horoscope")
+		await BotDB.update_status(message.chat.id, "horoscope")
 		btn1 = types.KeyboardButton(text=zodiac_signs[0])
 		btn2 = types.KeyboardButton(text=zodiac_signs[1])
 		btn3 = types.KeyboardButton(text=zodiac_signs[2])
@@ -283,7 +306,7 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		await state.set_state(States.CHOOSING_HOROSCOPE[0])
 
 	if message.text == "Новости📰":
-		BotDB.update_status(message.chat.id, "news")
+		await BotDB.update_status(message.chat.id, "news")
 
 		home = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
@@ -316,20 +339,20 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
 
-		BotDB.update_status(message.chat.id, "curr")
+		await BotDB.update_status(message.chat.id, "curr")
 
 		await send_curr(message.chat.id)
 
 		await state.set_state(States.CURRENCY[0])
 
 	if message.text == "Настройки⚙":
-		BotDB.update_status(message.chat.id, "settings")
+		await BotDB.update_status(message.chat.id, "settings")
 		back = types.KeyboardButton(text="Меню↩")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[back]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
-		modes = BotDB.get_modes(message.chat.id)
+		modes = await BotDB.get_modes(message.chat.id)
 		if ';' not in modes:
-			BotDB.update_modes(message.chat.id, '1;2;3')
+			await BotDB.update_modes(message.chat.id, '1;2;3')
 			modes = '1;2;3'
 		modes = modes.split(';')
 		await message.answer("Выберите категории рассылки", reply_markup=await settings_btns(modes))
@@ -362,7 +385,7 @@ async def settings(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(state=States.SETTINGS)
 async def set_mode(callback: types.CallbackQuery, state: FSMContext):
-	true_modes = BotDB.get_modes(callback.message.chat.id)
+	true_modes = await BotDB.get_modes(callback.message.chat.id)
 	modes = true_modes.split(';')
 	if 'not_mode' in callback.data:
 		modes.remove(callback.data.split(' ')[1])
@@ -370,7 +393,7 @@ async def set_mode(callback: types.CallbackQuery, state: FSMContext):
 		modes.append(callback.data.split(' ')[1])
 	markup = await settings_btns(modes)
 	modes = ';'.join(list(set(modes)))
-	BotDB.update_modes(callback.message.chat.id, modes)
+	await BotDB.update_modes(callback.message.chat.id, modes)
 	await bot.edit_message_reply_markup(
 		chat_id=callback.message.chat.id,
 		message_id=callback.message.message_id,
@@ -465,10 +488,10 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 	if callback.data == 'skip':
 		await send_news(
 			callback.message.chat.id,
-			BotDB.get_topic(callback.message.chat.id),
-			BotDB.get_article(callback.message.chat.id))
+			await BotDB.get_topic(callback.message.chat.id),
+			await BotDB.get_article(callback.message.chat.id))
 	elif callback.data in config.REV_NEWS_URLS:
-		BotDB.update_topic(callback.message.from_user.id, callback.data)
+		await BotDB.update_topic(callback.message.from_user.id, callback.data)
 		markup = types.ReplyKeyboardMarkup(
 			resize_keyboard=True, keyboard=[
 				[
@@ -477,8 +500,8 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 			]
 		)
 		await callback.message.answer("Нажмите 'назад', чтобы сменить тему", reply_markup=markup)
-		BotDB.update_article(callback.message.chat.id, 0)
-		BotDB.update_topic(callback.message.chat.id, callback.data)
+		await BotDB.update_article(callback.message.chat.id, 0)
+		await BotDB.update_topic(callback.message.chat.id, callback.data)
 		await send_news(callback.message.chat.id, callback.data, 0)
 		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
@@ -549,7 +572,7 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'news': (States.READING_NEWS[0], reading_news),
 		'settings': (States.SETTINGS[0], settings)
 	}
-	st = states[BotDB.get_status(message.chat.id)]
+	st = states[await BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
 	await st[1](message, state)
 
