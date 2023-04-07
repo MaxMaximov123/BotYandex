@@ -22,7 +22,7 @@ import functools
 from collectors import horoscope, currency
 from collectors import news
 
-bot = Bot(token=config.BETA_TOKEN)
+bot = Bot(token=config.REALISE_TOKEN)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
