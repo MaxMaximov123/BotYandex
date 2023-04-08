@@ -10,6 +10,7 @@ from aiogram.dispatcher import Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.utils import exceptions
 from threading import Thread
+import aiogram.utils.markdown as fmt
 from schedule import every, run_pending
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
@@ -22,7 +23,7 @@ import functools
 from collectors import horoscope, currency
 from collectors import news
 
-bot = Bot(token=config.REALISE_TOKEN)
+bot = Bot(token=config.REALISE_TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -49,10 +50,13 @@ async def send_curr(user_id, btn=True):
 	]]
 	builder = InlineKeyboardMarkup(inline_keyboard=btns if btn else None)
 	curr_list = await BotDB.get_curr(user_id)
-	curr_list = curr_list.split(';')
+	curr_list = [i for i in curr_list.split(';') if i]
 	msg_text = ''
-	for i in curr_list:
-		msg_text += f"{curr[i]['name']} ({i}): {curr[i]['val']}₽\n"
+	if curr_list:
+		for i in curr_list:
+			msg_text += f"<b>{curr[i]['name']} ({i})</b>:\t{curr[i]['val']}₽\n\n"
+	else:
+		msg_text = 'У вас нет избранных валют. Вы можете выбрать их в настройках'
 	await bot.send_message(
 		user_id,
 		msg_text,
@@ -130,7 +134,6 @@ async def start_mailing():
 		await asyncio.gather(*tasks)
 
 
-
 async def send_news(user_id, topic, article, skip_btn=True):
 	if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
 		skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
@@ -139,13 +142,20 @@ async def send_news(user_id, topic, article, skip_btn=True):
 
 		emoj = config.REV_NEWS_URLS[topic][-1]
 		markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
-		if ALL_NEWS[topic][article]["img"]:
-			await bot.send_photo(
-				user_id, photo=ALL_NEWS[topic][article]["img"],
-				caption=emoj + ' ' + ALL_NEWS[topic][article]['title'],
-				reply_markup=markup)
-		else:
-			await bot.send_message(user_id, emoj + ' ' + ALL_NEWS[topic][article]['title'], reply_markup=markup)
+		await bot.send_message(
+			user_id,
+			f"{fmt.hide_link(shorten_url(ALL_NEWS[topic][article]['url']))}",
+			parse_mode=types.ParseMode.HTML,
+			reply_markup=markup
+		)
+		# Другой формат отправки новостей!!!!
+		# if ALL_NEWS[topic][article]["img"]:
+		# 	await bot.send_photo(
+		# 		user_id, photo=ALL_NEWS[topic][article]["img"],
+		# 		caption=emoj + ' ' + ALL_NEWS[topic][article]['title'],
+		# 		reply_markup=markup, parse_mode=types.ParseMode.HTML)
+		# else:
+		# 	await bot.send_message(user_id, emoj + ' ' + ALL_NEWS[topic][article]['title'], reply_markup=markup)
 		await BotDB.update_article(user_id, article + 1)
 	else:
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
@@ -294,9 +304,10 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		btn12 = types.KeyboardButton(text=zodiac_signs[11])
 		back = types.KeyboardButton(text="Меню↩")
 		kb = [
-			[btn1, btn2, btn3, btn4],
-			[btn5, btn6, btn7, btn8],
-			[btn9, btn10, btn11, btn12],
+			[btn1, btn2, btn3],
+			[btn4, btn5, btn6],
+			[btn7, btn8, btn9],
+			[btn10, btn11, btn12],
 			[back]
 		]
 		markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=kb)
@@ -346,16 +357,16 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		await state.set_state(States.CURRENCY[0])
 
 	if message.text == "Настройки⚙":
+		sett_btns = [
+			[
+				types.KeyboardButton(text="Параметры рассылки⏰"),
+				types.KeyboardButton(text="Персональные валюты💰"),
+			],
+			[types.KeyboardButton(text="Меню↩")]
+		]
 		await BotDB.update_status(message.chat.id, "settings")
-		back = types.KeyboardButton(text="Меню↩")
-		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[back]])
-		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
-		modes = await BotDB.get_modes(message.chat.id)
-		if ';' not in modes:
-			await BotDB.update_modes(message.chat.id, '1;2;3')
-			modes = '1;2;3'
-		modes = modes.split(';')
-		await message.answer("Выберите категории рассылки", reply_markup=await settings_btns(modes))
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=sett_btns)
+		await message.answer("Выберите категорию настроек", reply_markup=markup1)
 		await state.set_state(States.SETTINGS[0])
 
 
@@ -377,13 +388,79 @@ async def choosing_curr(message: types.Message, state: FSMContext):
 		await menu(message)
 
 
-@dp.message_handler(state=States.SETTINGS)
+@dp.message_handler(state=States.MAIL_SETTINGS + States.PERS_CURR_SETTINGS)
+async def back_to_settings(message: types.Message, state: FSMContext):
+	if message.text == 'Назад↩':
+		message.text = 'Настройки⚙'
+		await state.set_state(States.SETTINGS[0])
+		await choosing_in_menu(message, state)
+
+
+@dp.message_handler(state=States.SETTINGS + States.MAIL_SETTINGS)
 async def settings(message: types.Message, state: FSMContext):
 	if message.text == 'Меню↩':
 		await menu(message)
+	elif message.text == 'Параметры рассылки⏰':
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[types.KeyboardButton(text="Назад↩")]])
+		await message.answer(
+			"Нажмите 'Назад↩', чтобы вернуться в настройки",
+			reply_markup=markup1)
+		modes = await BotDB.get_modes(message.chat.id)
+		modes = modes.split(';')
+		await BotDB.update_status(message.chat.id, "mail_settings")
+		await message.answer("Выберите категории рассылки", reply_markup=await settings_btns(modes))
+		await state.set_state(States.MAIL_SETTINGS[0])
+	elif message.text == 'Персональные валюты💰':
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[types.KeyboardButton(text="Назад↩")]])
+		await message.answer(
+			"Нажмите 'Назад↩', чтобы вернуться в настройки",
+			reply_markup=markup1)
+		await state.set_state(States.PERS_CURR_SETTINGS[0])
+		await BotDB.update_status(message.chat.id, 'pers_curr_settings')
+		await other_curr_btns(message.chat.id, from_sett=True)
 
 
-@dp.callback_query_handler(state=States.SETTINGS)
+@dp.callback_query_handler(state=States.PERS_CURR_SETTINGS)
+async def set_pers_curr(callback: types.CallbackQuery, state: FSMContext):
+	if 'slice_' in callback.data:
+		await callback_on_click_slice_curr(callback, from_sett=True)
+	elif callback.data.startswith('curr_'):
+		new_mark = callback.message.reply_markup
+		curr = callback.data.split('_')[1]
+		for i in new_mark.inline_keyboard:
+			if curr in i[0].callback_data:
+				i[0].text = i[0].text + '✅'
+				i[0].callback_data = '✅' + i[0].callback_data
+		await BotDB.update_curr(
+			callback.message.chat.id,
+			await BotDB.get_curr(callback.message.chat.id) + ';' + curr
+		)
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=new_mark
+		)
+	elif callback.data.startswith('✅curr_'):
+		pers_curr = (await BotDB.get_curr(callback.message.chat.id)).split(';')
+		pers_curr.remove(callback.data.split('_')[1])
+		new_mark = callback.message.reply_markup
+		curr = callback.data.split('_')[1]
+		for i in new_mark.inline_keyboard:
+			if curr in i[0].callback_data:
+				i[0].text = i[0].text[:-1]
+				i[0].callback_data = i[0].callback_data[1:]
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=new_mark
+		)
+		await BotDB.update_curr(
+			callback.message.chat.id,
+			';'.join(pers_curr)
+		)
+
+
+@dp.callback_query_handler(state=States.MAIL_SETTINGS)
 async def set_mode(callback: types.CallbackQuery, state: FSMContext):
 	true_modes = await BotDB.get_modes(callback.message.chat.id)
 	modes = true_modes.split(';')
@@ -401,8 +478,87 @@ async def set_mode(callback: types.CallbackQuery, state: FSMContext):
 	)
 
 
+async def other_curr_btns(user_id, from_sett=False):
+	slice_ = (0, 5)
+	step = 5
+	curr = currency.get()
+	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
+	btns = []
+	if from_sett:
+		pers_curr = (await BotDB.get_curr(user_id)).split(';')
+	for i in keys[slice_[0]:slice_[1]]:
+		add_s = ''
+		if from_sett and i in pers_curr:
+			add_s = '✅'
+		btns.append([
+			types.InlineKeyboardButton(
+				text=f"{curr[i]['name']} ({i}){add_s}",
+				callback_data=f"{add_s}curr_{i}"),
+		])
+	btns.append([
+		types.InlineKeyboardButton(
+			text=f">>",
+			callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+	])
+	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	await bot.send_message(
+		user_id,
+		"Выберите валюу:",
+		reply_markup=builder)
+
+
+async def callback_on_click_slice_curr(callback, from_sett=False):
+	slice_ = [
+		int(callback.data.split('_')[1]),
+		int(callback.data.split('_')[2])
+	]
+	step = 5
+	curr = currency.get()
+	keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
+	btns = []
+	if from_sett:
+		pers_curr = (await BotDB.get_curr(callback.message.chat.id)).split(';')
+	for i in keys[slice_[0]:slice_[1]]:
+		add_s = ''
+		if from_sett and i in pers_curr:
+			add_s = '✅'
+		btns.append([
+			types.InlineKeyboardButton(
+				text=f"{curr[i]['name']} ({i}){add_s}",
+				callback_data=f"{add_s}curr_{i}"),
+		])
+	if slice_[0] <= 0:
+		row = [
+			types.InlineKeyboardButton(
+				text=f">>",
+				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+		]
+	elif len(keys) < slice_[1]:
+		row = [
+			types.InlineKeyboardButton(
+				text="<<",
+				callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
+		]
+	else:
+		row = [
+			types.InlineKeyboardButton(
+				text="<<",
+				callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
+			types.InlineKeyboardButton(
+				text=f">>",
+				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+		]
+
+	btns.append(row)
+	builder = InlineKeyboardMarkup(inline_keyboard=btns)
+	await bot.edit_message_reply_markup(
+		callback.message.chat.id,
+		callback.message.message_id,
+		reply_markup=builder)
+
+
 @dp.callback_query_handler(state=States.CURRENCY)
-async def curr_(callback: types.CallbackQuery, state: FSMContext):
+async def curr_(callback: types.CallbackQuery, state: FSMContext, from_sett=False):
 	if 'curr_' in callback.data:
 		builder = InlineKeyboardMarkup()
 		curr = currency.get()
@@ -412,73 +568,13 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext):
 			callback_data="other_currency")
 		)
 		await callback.message.answer(
-			f"{curr[key]['name']} ({key}): {curr[key]['val']}₽\n",
+			f"<b>{curr[key]['name']} ({key})</b>:\t{curr[key]['val']}₽\n\n",
 			reply_markup=builder)
 		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
-	elif 'other_currency' in callback.data:
-		slice_ = (0, 5)
-		step = 5
-		curr = currency.get()
-		keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
-		btns = []
-		for i in keys[slice_[0]:slice_[1]]:
-			btns.append([
-				types.InlineKeyboardButton(
-					text=f"{curr[i]['name']} ({i})",
-					callback_data=f"curr_{i}"),
-			])
-		btns.append([
-			types.InlineKeyboardButton(
-				text=f">>",
-				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
-		])
-		builder = InlineKeyboardMarkup(inline_keyboard=btns)
-		await callback.message.answer(
-			"Выберите валюу:",
-			reply_markup=builder)
+	elif 'other_currency' in callback.data or from_sett:
+		await other_curr_btns(callback.message.chat.id)
 	elif 'slice_' in callback.data:
-		slice_ = [
-			int(callback.data.split('_')[1]),
-			int(callback.data.split('_')[2])
-		]
-		step = 5
-		curr = currency.get()
-		keys = sorted(list(curr.keys()), key=lambda x: curr[x]['name'])
-		btns = []
-		for i in keys[slice_[0]:slice_[1]]:
-			btns.append([
-				types.InlineKeyboardButton(
-					text=f"{curr[i]['name']} ({i})",
-					callback_data=f"curr_{i}"),
-			])
-		if slice_[0] <= 0:
-			row = [
-				types.InlineKeyboardButton(
-					text=f">>",
-					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
-			]
-		elif len(keys) < slice_[1]:
-			row = [
-				types.InlineKeyboardButton(
-					text="<<",
-					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
-			]
-		else:
-			row = [
-				types.InlineKeyboardButton(
-					text="<<",
-					callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
-				types.InlineKeyboardButton(
-					text=f">>",
-					callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
-			]
-
-		btns.append(row)
-		builder = InlineKeyboardMarkup(inline_keyboard=btns)
-		await bot.edit_message_reply_markup(
-			callback.message.chat.id,
-			callback.message.message_id,
-			reply_markup=builder)
+		await callback_on_click_slice_curr(callback)
 
 
 @dp.callback_query_handler(state=States.READING_NEWS)
@@ -570,7 +666,9 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'horoscope': (States.CHOOSING_HOROSCOPE[0], choosing_horoscope),
 		'curr': (States.CURRENCY[0], choosing_curr),
 		'news': (States.READING_NEWS[0], reading_news),
-		'settings': (States.SETTINGS[0], settings)
+		'settings': (States.SETTINGS[0], settings),
+		'mail_settings': (States.MAIL_SETTINGS[0], back_to_settings),
+		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], back_to_settings)
 	}
 	st = states[await BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
@@ -609,12 +707,12 @@ async def main():
 	save_all()
 	every(10).minutes.do(save_all)
 
-
 	tasks = [
 		asyncio.create_task(dp.start_polling(bot)),
 		asyncio.create_task(work())
 	]
 	await asyncio.gather(*tasks)
+
 
 if __name__ == "__main__":
 	if os.name == 'nt':

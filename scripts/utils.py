@@ -10,6 +10,8 @@ class States(Helper):
     CURRENCY = ListItem()
     READING_NEWS = ListItem()
     SETTINGS = ListItem()
+    MAIL_SETTINGS = ListItem()
+    PERS_CURR_SETTINGS = ListItem()
 
 
 
