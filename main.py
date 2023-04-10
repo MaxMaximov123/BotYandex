@@ -95,22 +95,30 @@ async def send_mail(user_id):
 		if modes:
 			await bot.send_message(user_id, "Утренние новости☕️📰:")
 			if '2' in modes:
-				znak = await BotDB.get_znak(user_id)
-				if znak in config.zodiac_signs_links:
-					await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
-					for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
-						await bot.send_message(user_id, j.text)
-				else:
-					await bot.send_message(
-						user_id,
-						"Вы не указали вашу дату рождения для гороскопа, чтобы указать ее введите /age")
+				try:
+					znak = await BotDB.get_znak(user_id)
+					if znak in config.zodiac_signs_links:
+						await bot.send_message(user_id, horoscope.get(config.zodiac_signs_links[znak])[0])
+						for j in horoscope.get(config.zodiac_signs_links[znak])[1]:
+							await bot.send_message(user_id, j.text)
+					else:
+						await bot.send_message(
+							user_id,
+							"Вы не указали вашу дату рождения для гороскопа, чтобы указать ее введите /age")
+				except Exception as e:
+					logging.warning(f"не удалось отправить гороскоп пользователю {user_id} | {e}")
 			if '3' in modes:
-				await send_curr(user_id, btn=False)
+				try:
+					await send_curr(user_id, btn=False)
+				except Exception as e:
+					logging.warning(f"не удалось отправить валюты пользователю {user_id} | {e}")
 
 			if '1' in modes:
-				for num in range(len(ALL_NEWS['https://dzen.ru/news'][:6])):
-					await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
-
+				try:
+					for num in range(len(ALL_NEWS['https://dzen.ru/news'][:6])):
+						await send_news(user_id, 'https://dzen.ru/news', num, skip_btn=False)
+				except Exception as e:
+					logging.warning(f"не удалось отправить новости пользователю {user_id} | {e}")
 	except exceptions.BotBlocked:
 		logging.warning(f"Bot blocked by user {user_id}")
 	except exceptions.ChatNotFound:
@@ -123,10 +131,10 @@ async def send_mail(user_id):
 		logging.warning(f"Error occurred: {e}")
 
 
-async def start_mailing():
+async def start_mailing(start=False):
 	now = datetime.datetime.now().time().replace(microsecond=0, second=0)
 
-	if now == config.SEND_TIME:
+	if now == config.SEND_TIME or start:
 		logging.info('start mailing')
 		tasks = []
 		for user_id, in await BotDB.get_id():
@@ -191,6 +199,7 @@ async def settings_btns(modes):
 
 @dp.message_handler(commands=['start'], state='*')
 async def cmd_start(message: types.Message, state: FSMContext):
+
 	if (message.chat.id,) not in await BotDB.get_id():
 		await message.answer(
 			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
@@ -360,7 +369,7 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		sett_btns = [
 			[
 				types.KeyboardButton(text="Параметры рассылки⏰"),
-				types.KeyboardButton(text="Персональные валюты💰"),
+				types.KeyboardButton(text="Избранные валюты💰"),
 			],
 			[types.KeyboardButton(text="Меню↩")]
 		]
@@ -410,7 +419,7 @@ async def settings(message: types.Message, state: FSMContext):
 		await BotDB.update_status(message.chat.id, "mail_settings")
 		await message.answer("Выберите категории рассылки", reply_markup=await settings_btns(modes))
 		await state.set_state(States.MAIL_SETTINGS[0])
-	elif message.text == 'Персональные валюты💰':
+	elif message.text == 'Избранные валюты💰':
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[types.KeyboardButton(text="Назад↩")]])
 		await message.answer(
 			"Нажмите 'Назад↩', чтобы вернуться в настройки",
@@ -579,8 +588,6 @@ async def curr_(callback: types.CallbackQuery, state: FSMContext, from_sett=Fals
 
 @dp.callback_query_handler(state=States.READING_NEWS)
 async def choosing_categories_news(callback: types.CallbackQuery, state: FSMContext):
-	print(callback.data)
-
 	if callback.data == 'skip':
 		await send_news(
 			callback.message.chat.id,
@@ -711,6 +718,7 @@ async def main():
 		asyncio.create_task(dp.start_polling(bot)),
 		asyncio.create_task(work())
 	]
+	await start_mailing(start=True)
 	await asyncio.gather(*tasks)
 
 
