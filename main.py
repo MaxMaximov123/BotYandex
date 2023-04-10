@@ -718,7 +718,6 @@ async def main():
 		asyncio.create_task(dp.start_polling(bot)),
 		asyncio.create_task(work())
 	]
-	await start_mailing(start=True)
 	await asyncio.gather(*tasks)
 
 
