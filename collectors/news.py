@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import requests
 from scripts import config
 from bs4 import BeautifulSoup as BS
@@ -15,6 +17,24 @@ logging.basicConfig(
 )
 
 data = {}
+
+
+async def search(text):
+	res_data = requests.get(
+		f'https://dzen.ru/news/search?issue_tld=ru&p=1&text={text}'
+		f'&ajax=10000&neo_parent_id=1681220433567864-7112010267673059742-'
+		f'vwm4cd6b67joezqu-BAL-1570-NEWS-NEWS_NEWS_SEARCH', headers=config.HEADERS_TO_NEWS).json()['data']['stories']
+	exp_data = []
+	for i in res_data:
+		i = i['docs'][0]
+		exp_data.append(
+			{
+				'title': "".join([j['text'] for j in i['title']]),
+				'img': i['image'],
+				'url': i['url']
+			}
+		)
+	return exp_data
 
 
 def save_img(url, num):
@@ -86,4 +106,4 @@ async def main():
 
 if __name__ == '__main__':
 	path_ = '../'
-	asyncio.run(main())
+	asyncio.run(search('смерть'))

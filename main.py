@@ -148,7 +148,6 @@ async def send_news(user_id, topic, article, skip_btn=True):
 		det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
 		key_b = [[skip, det]] if skip_btn else [[det]]
 
-		emoj = config.REV_NEWS_URLS[topic][-1]
 		markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
 		await bot.send_message(
 			user_id,
@@ -156,11 +155,12 @@ async def send_news(user_id, topic, article, skip_btn=True):
 			parse_mode=types.ParseMode.HTML,
 			reply_markup=markup
 		)
-		# Другой формат отправки новостей!!!!
+		'''Другой формат отправки новостей!!!!'''
+
 		# if ALL_NEWS[topic][article]["img"]:
 		# 	await bot.send_photo(
 		# 		user_id, photo=ALL_NEWS[topic][article]["img"],
-		# 		caption=emoj + ' ' + ALL_NEWS[topic][article]['title'],
+		# 		caption=ALL_NEWS[topic][article]['title'],
 		# 		reply_markup=markup, parse_mode=types.ParseMode.HTML)
 		# else:
 		# 	await bot.send_message(user_id, emoj + ' ' + ALL_NEWS[topic][article]['title'], reply_markup=markup)
@@ -334,7 +334,9 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		slice_ = (0, 8)
 		step = 8
 
-		kb = []
+		kb = [[types.InlineKeyboardButton(
+					text='Поиск🔎',
+					callback_data='search')]]
 		btns = list(config.NEWS_URLS.items())[slice_[0]:slice_[1]]
 		for i in range(0, len(btns) - 1, 2):
 			kb.append([
@@ -594,7 +596,6 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 			await BotDB.get_topic(callback.message.chat.id),
 			await BotDB.get_article(callback.message.chat.id))
 	elif callback.data in config.REV_NEWS_URLS:
-		await BotDB.update_topic(callback.message.from_user.id, callback.data)
 		markup = types.ReplyKeyboardMarkup(
 			resize_keyboard=True, keyboard=[
 				[
@@ -608,13 +609,19 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 		await send_news(callback.message.chat.id, callback.data, 0)
 		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
+	elif callback.data == 'search':
+		await callback.message.answer('Введите запрос поиска')
+		ALL_NEWS[str(callback.message.chat.id)] = callback.message.message_id
+
 	elif 'slice_' in callback.data:
 		slice_ = [
 			int(callback.data.split('_')[1]),
 			int(callback.data.split('_')[2])
 		]
 		step = 8
-		kb = []
+		kb = [[types.InlineKeyboardButton(
+					text='Поиск🔎',
+					callback_data='search')]]
 		btns = list(config.NEWS_URLS.items())[slice_[0]:slice_[1]]
 		for i in range(0, len(btns) - 1, 2):
 			kb.append([
@@ -663,6 +670,21 @@ async def reading_news(message: types.Message, state: FSMContext):
 		await choosing_in_menu(message1, state)
 	elif message.text == "Меню↩":
 		await menu(message)
+
+	else:
+		await bot.delete_message(message.chat.id, ALL_NEWS[str(message.chat.id)])
+		ALL_NEWS[str(message.chat.id)] = await news.search(message.text)
+		markup = types.ReplyKeyboardMarkup(
+			resize_keyboard=True, keyboard=[
+				[
+					types.KeyboardButton(text="⬅Назад"),
+					types.KeyboardButton(text="Меню↩")]
+			]
+		)
+		await message.answer("Нажмите 'назад', чтобы вернуться к категориям", reply_markup=markup)
+		await BotDB.update_topic(message.from_user.id, str(message.chat.id))
+		await BotDB.update_article(message.chat.id, 0)
+		await send_news(message.chat.id, str(message.chat.id), 0)
 
 
 @dp.message_handler()
