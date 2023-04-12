@@ -384,7 +384,7 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 
 	if message.text == "Инвестиции📈":
 		home = types.KeyboardButton(text="Меню↩")
-		back = types.KeyboardButton(text="⬅️Назад")
+		back = types.KeyboardButton(text="⬅Назад")
 		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
 		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
 
@@ -425,20 +425,38 @@ async def choosing_curr(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(state=States.STOCKS_CASE)
 async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 	home = types.KeyboardButton(text="Меню↩")
-	back = types.KeyboardButton(text="⬅️Назад")
+	back = types.KeyboardButton(text="⬅Назад")
 	markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home, back]])
-	await callback.message.answer("'⬅️Назад', чтобы вернуться в портфель", reply_markup=markup1)
+	await callback.message.answer("'⬅Назад', чтобы вернуться в портфель", reply_markup=markup1)
 	if callback.data == 'search':
 		await callback.message.answer('<i><b>Введите название акции</b></i>')
 		await state.set_state(States.SEARCH_STOCKS[0])
 		await BotDB.update_status(callback.message.chat.id, 'search_stocks')
+	else:
+		img = 'https://sun6-23.userapi.com/s/v1/if1/u29aYlOqhDgglHmvgRkT2IAZ3VmLxjh5djPTew1KTBMcFdrHuPhSZpsaYOCE02O_xeaRhsCm.jpg?size=809x810&quality=96&crop=37,0,809,810&ava=1'
+		if ALL_STOCKS[callback.data]["img"]:
+			img = f'https://s3-symbol-logo.tradingview.com/{ALL_STOCKS[callback.data]["img"]}--big.svg'
+		print(img)
+		await bot.send_photo(
+			callback.message.chat.id, photo=img)
+		await state.set_state(States.MY_STOCK[0])
+		await BotDB.update_status(callback.message.chat.id, 'my_stock')
+
+
+@dp.message_handler(state=States.MY_STOCK)
+async def search_stocks(message: types.Message, state: FSMContext):
+	if message.text == 'Меню↩':
+		await menu(message)
+	elif message.text == '⬅Назад':
+		message.text = 'Инвестиции📈'
+		await choosing_in_menu(message, state)
 
 
 @dp.message_handler(state=States.SEARCH_STOCKS)
 async def search_stocks(message: types.Message, state: FSMContext):
 	if message.text == 'Меню↩':
 		await menu(message)
-	elif message.text == '⬅️Назад':
+	elif message.text == '⬅Назад':
 		message.text = 'Инвестиции📈'
 		await choosing_in_menu(message, state)
 

@@ -14,6 +14,7 @@ class States(Helper):
     PERS_CURR_SETTINGS = ListItem()
     STOCKS_CASE = ListItem()
     SEARCH_STOCKS = ListItem()
+    MY_STOCK = ListItem()
 
 
 

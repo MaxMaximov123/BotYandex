@@ -3,7 +3,7 @@ import datetime
 BETA_TOKEN = "5149866452:AAGx1cymIUtKcOqWwajMOr5RNj7I5QdKlZA"
 REALISE_TOKEN = '5663602666:AAENpFtmuiFjiHLp2BB-yEg3wnqmF2ltw78'
 
-SEND_TIME = datetime.time(hour=5, minute=0, second=0)
+SEND_TIME = datetime.time(hour=4, minute=0, second=0)
 
 HEADERS_TO_NEWS = {
 	'cookie': 'sso_checked=1; Session_id=3:1663433035.5.0.1663433035738:6xZlBQ:20D.1.2:1|883187617.0.2|64:10003835.681836.xnGm7GifGL7Ca51K8l0VpzizisI; yandex_login=maxss.k2n; yandexuid=1979425991640958970; mda2_beacon=1663433035749; gdpr=0; _ym_d=1663433038; _ym_uid=16634330381069804080; vid=e8d0a90e328f8d78; tmr_lvid=4b172abb4997249b25454fd3166bb785; tmr_lvidTS=1664709380222; _yasc=8ScIIJd6joNRWrZw+Sqjf0f5NjkpTbuWeoNd7pRyT4ngVS01bXdy2C5/jgLV; zen_sso_checked=1; vsd=eyJnZW8iOiIxODgiLCJ1YSI6IllBQlJPV1NFUiIsImVhIjozMCwiZWciOjJ9; _ym_isad=2; tmr_detect=0%7C1677143581052',
