@@ -42,4 +42,21 @@ NEWS_URLS = {
 	'Авто🚗': 'https://dzen.ru/news/rubric/auto'
 }
 
+
+COUNTRIES = [
+	'america', 'argentina', 'bahrain', 'belgium',
+	'brazil', 'uk', 'hungary', 'venezuela',
+	'vietnam', 'germany', 'hongkong', 'greece',
+	'denmark', 'egypt', 'israel', 'india',
+	'indonesia', 'iceland', 'spain', 'italy',
+	'canada', 'qatar', 'china', 'colombia',
+	'latvia', 'lithuania', 'luxembourg', 'malaysia',
+	'mexico', 'nigeria', 'netherlands', 'newzealand',
+	'norway', 'uae', 'peru', 'poland',
+	'portugal', 'russia', 'romania', 'ksa',
+	'serbia', 'singapore', 'slovakia', 'thailand',
+	'taiwan', 'turkey', 'philippines', 'finland',
+	'france', 'chile', 'switzerland', 'sweden',
+	'estonia', 'rsa', 'korea', 'japan'
+]
 REV_NEWS_URLS = dict([tuple(reversed(i)) for i in NEWS_URLS.items()])

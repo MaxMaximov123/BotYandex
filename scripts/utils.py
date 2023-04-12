@@ -12,6 +12,8 @@ class States(Helper):
     SETTINGS = ListItem()
     MAIL_SETTINGS = ListItem()
     PERS_CURR_SETTINGS = ListItem()
+    STOCKS_CASE = ListItem()
+    SEARCH_STOCKS = ListItem()
 
 
 

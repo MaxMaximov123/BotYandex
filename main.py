@@ -1,5 +1,7 @@
 import logging
 import os
+from pprint import pprint
+
 from aiogram import Bot, types
 import json
 import pyshorteners
@@ -20,15 +22,17 @@ from scripts.utils import States
 from scripts.db import BotDB
 import asyncio
 import functools
-from collectors import horoscope, currency
-from collectors import news
+from collectors import horoscope, currency, news, investing
 
-bot = Bot(token=config.REALISE_TOKEN, parse_mode=types.ParseMode.HTML)
+bot = Bot(token=config.BETA_TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
 filters = FiltersFactory(dp)
+
 ALL_NEWS = {}
+ALL_STOCKS = {}
+SEARCH_STOCKS_RESULTS = {}
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
 
@@ -56,7 +60,7 @@ async def send_curr(user_id, btn=True):
 		for i in curr_list:
 			msg_text += f"<b>{curr[i]['name']} ({i})</b>:\t{curr[i]['val']}₽\n\n"
 	else:
-		msg_text = 'У вас нет избранных валют. Вы можете выбрать их в настройках'
+		msg_text = '<i><b>У вас нет избранных валют. Вы можете выбрать их в настройках</b></i>'
 	await bot.send_message(
 		user_id,
 		msg_text,
@@ -70,7 +74,7 @@ async def birthday(user_id):
 	if await BotDB.get_birth(user_id) == data:
 		await bot.send_message(
 			user_id,
-			"Дорогой пользователь, поздравляю Вас с днем рождения, спасибо, что Вы с нами!🥳")
+			"<b>Дорогой пользователь, поздравляю Вас с днем рождения, спасибо, что Вы с нами!🥳</b>")
 
 
 async def menu(message, text='Вы в меню'):
@@ -83,7 +87,7 @@ async def menu(message, text='Вы в меню'):
 	btn4 = types.KeyboardButton(text="Настройки⚙")
 	kb = [[btn1, btn2, btn3], [btn5, btn4]]
 	markup = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=kb)
-	await message.answer(text, reply_markup=markup)
+	await message.answer(f'<i><b>{text}</b></i>', reply_markup=markup)
 	await state.set_state(States.MENU_STATE[0])
 
 
@@ -93,7 +97,7 @@ async def send_mail(user_id):
 		true_modes = await BotDB.get_modes(user_id)
 		modes = true_modes.split(';')
 		if modes:
-			await bot.send_message(user_id, "Утренние новости☕️📰:")
+			await bot.send_message(user_id, "<i><b>Утренние новости☕️📰:</b></i>")
 			if '2' in modes:
 				try:
 					znak = await BotDB.get_znak(user_id)
@@ -171,7 +175,7 @@ async def send_news(user_id, topic, article, skip_btn=True):
 				types.KeyboardButton(text="⬅Назад"),
 				types.KeyboardButton(text="Меню↩")]
 		])
-		await bot.send_message(user_id, "Новости на эту тему закончились", reply_markup=markup)
+		await bot.send_message(user_id, "<i><b>Новости на эту тему закончились</b></i>", reply_markup=markup)
 
 
 async def settings_btns(modes):
@@ -202,7 +206,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 	if (message.chat.id,) not in await BotDB.get_id():
 		await message.answer(
-			f'{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп')
+			f'<i><b>{message.from_user.first_name}, здравствуйте, я новостной бот. Напишите мне день и месяц вашего рождения (через точку), чтобы получать гороскоп</b></i>')
 		if not await BotDB.user_exists(message.chat.id):
 			await BotDB.add_user(
 				message.chat.id,
@@ -211,7 +215,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 				message.from_user.username,
 				"pass",
 				'1;2;3',
-				'USD;EUR'
+				'USD;EUR',
+				''
 			)
 		else:
 			await BotDB.update_status(message.chat.id, "welcome")
@@ -219,7 +224,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 		await state.set_state(States.WELCOME_STATE[0])
 
 	else:
-		await message.answer("Я тебя помню, если хочешь изменить дату рождения, введи команду /age")
+		await message.answer("<i><b>Я тебя помню, если хочешь изменить дату рождения, введи команду /age</b></i>")
 		await menu(message, 'Вы в меню')
 
 
@@ -294,9 +299,6 @@ async def welcome(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=States.MENU_STATE)
 async def choosing_in_menu(message: types.Message, state: FSMContext):
-	if message.text == 'Инвестиции📈':
-		await BotDB.update_status(message.chat.id, "invest")
-
 	if message.text == "Гороскопы🪐":
 		await BotDB.update_status(message.chat.id, "horoscope")
 		btn1 = types.KeyboardButton(text=zodiac_signs[0])
@@ -380,6 +382,27 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
 		await message.answer("Выберите категорию настроек", reply_markup=markup1)
 		await state.set_state(States.SETTINGS[0])
 
+	if message.text == "Инвестиции📈":
+		home = types.KeyboardButton(text="Меню↩")
+		back = types.KeyboardButton(text="⬅️Назад")
+		markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home]])
+		await message.answer("Чтобы вернуться, нажмите кнопку меню", reply_markup=markup1)
+
+		kb = [[types.InlineKeyboardButton(
+					text='Добавить акцию❇️',
+					callback_data='search')]]
+
+		stocks = [i for i in (await BotDB.get_stocks(message.chat.id)).split(';') if i]
+		for i in stocks:
+			kb.append([types.InlineKeyboardButton(
+					text=i,
+					callback_data=i)])
+
+		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+		await message.answer("<b>Ваши акции:</b>", reply_markup=markup)
+		await BotDB.update_status(message.chat.id, "invest")
+		await state.set_state(States.STOCKS_CASE[0])
+
 
 @dp.message_handler(state=States.CHOOSING_HOROSCOPE)
 async def choosing_horoscope(message: types.Message, state: FSMContext):
@@ -393,10 +416,137 @@ async def choosing_horoscope(message: types.Message, state: FSMContext):
 		await message.answer("Я не понимаю")
 
 
-@dp.message_handler(state=States.CURRENCY)
+@dp.message_handler(state=States.CURRENCY + States.STOCKS_CASE + States.CURRENCY)
 async def choosing_curr(message: types.Message, state: FSMContext):
 	if message.text == 'Меню↩':
 		await menu(message)
+
+
+@dp.callback_query_handler(state=States.STOCKS_CASE)
+async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
+	home = types.KeyboardButton(text="Меню↩")
+	back = types.KeyboardButton(text="⬅️Назад")
+	markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home, back]])
+	await callback.message.answer("'⬅️Назад', чтобы вернуться в портфель", reply_markup=markup1)
+	if callback.data == 'search':
+		await callback.message.answer('<i><b>Введите название акции</b></i>')
+		await state.set_state(States.SEARCH_STOCKS[0])
+		await BotDB.update_status(callback.message.chat.id, 'search_stocks')
+
+
+@dp.message_handler(state=States.SEARCH_STOCKS)
+async def search_stocks(message: types.Message, state: FSMContext):
+	if message.text == 'Меню↩':
+		await menu(message)
+	elif message.text == '⬅️Назад':
+		message.text = 'Инвестиции📈'
+		await choosing_in_menu(message, state)
+
+	else:
+		slice_ = (0, 5)
+		step = 5
+		kb = []
+		pers_stocks = (await BotDB.get_stocks(message.chat.id)).split(';')
+		for i in ALL_STOCKS:
+			title = message.text.lower()
+			tit, name = [j.lower() for j in i.split(' | ')]
+			if title in i or title in tit or tit in title or name in title or title in name:
+				text = i
+				data = i
+				if i in pers_stocks:
+					text = i + '✅'
+					data = i + '✅'
+				kb.append(
+					[types.InlineKeyboardButton(
+						text=text,
+						callback_data=data)])
+		SEARCH_STOCKS_RESULTS[str(message.chat.id)] = kb
+		kb = kb[:5]
+		kb.append([
+			types.InlineKeyboardButton(
+				text='>>',
+				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}")])
+
+		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+		await message.answer(f'Вот все, что удалось найти: {min(5, len(kb))}/{len(kb)}', reply_markup=markup)
+
+
+@dp.callback_query_handler(state=States.SEARCH_STOCKS)
+async def results_stocks_list(callback: types.CallbackQuery, state: FSMContext):
+	if 'slice' in callback.data:
+		slice_ = [
+			int(callback.data.split('_')[1]),
+			int(callback.data.split('_')[2])
+		]
+		step = 5
+		if str(callback.message.chat.id) in SEARCH_STOCKS_RESULTS:
+			res = SEARCH_STOCKS_RESULTS[str(callback.message.chat.id)]
+			kb = res[slice_[0]:slice_[1]]
+
+			if slice_[0] <= 0:
+				row = [
+					types.InlineKeyboardButton(
+						text=f">>",
+						callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+				]
+			elif len(res) < slice_[1]:
+				row = [
+					types.InlineKeyboardButton(
+						text="<<",
+						callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}")
+				]
+			else:
+				row = [
+					types.InlineKeyboardButton(
+						text="<<",
+						callback_data=f"slice_{slice_[0] - step}_{slice_[1] - step}"),
+					types.InlineKeyboardButton(
+						text=f">>",
+						callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}"),
+				]
+			kb.append(row)
+			builder = InlineKeyboardMarkup(inline_keyboard=kb)
+			await bot.edit_message_text(
+				f'Вот все, что удалось найти: {min(slice_[1], len(res))}/{len(res)}',
+				callback.message.chat.id,
+				callback.message.message_id,
+				reply_markup=builder
+			)
+		else:
+			await callback.message.answer('Извините, я забыл результаты поиска, попробуйте еще раз')
+
+	elif callback.data in ALL_STOCKS or callback.data[:-1] in ALL_STOCKS:
+		res = SEARCH_STOCKS_RESULTS[str(callback.message.chat.id)]
+		pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';')
+		msg_kb = callback.message.reply_markup.inline_keyboard
+		for [i] in msg_kb:
+			if callback.data == i.callback_data:
+				if i.text[-1] == '✅':
+					i.text = i.text[:-1]
+					i.callback_data = i.callback_data[:-1]
+					if i.text in pers_stocks:
+						pers_stocks.remove(i.text)
+				else:
+					pers_stocks.append(i.text)
+					i.text += '✅'
+					i.callback_data += '✅'
+
+		for [i] in res:
+			if i.text[-1] == '✅':
+				i.text = i.text[:-1]
+				i.callback_data = i.callback_data[:-1]
+			else:
+				i.text += '✅'
+				i.callback_data += '✅'
+
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=InlineKeyboardMarkup(inline_keyboard=msg_kb)
+		)
+		await BotDB.update_stocks(callback.message.chat.id, ';'.join(pers_stocks))
+	else:
+		await callback.message.answer('Извините, я не понимаю')
 
 
 @dp.message_handler(state=States.MAIL_SETTINGS + States.PERS_CURR_SETTINGS)
@@ -611,7 +761,7 @@ async def choosing_categories_news(callback: types.CallbackQuery, state: FSMCont
 
 	elif callback.data == 'search':
 		await callback.message.answer('Введите запрос поиска')
-		ALL_NEWS[str(callback.message.chat.id)] = callback.message.message_id
+		await bot.delete_message(callback.message.chat.id, callback.message.message_id)
 
 	elif 'slice_' in callback.data:
 		slice_ = [
@@ -672,7 +822,6 @@ async def reading_news(message: types.Message, state: FSMContext):
 		await menu(message)
 
 	else:
-		await bot.delete_message(message.chat.id, ALL_NEWS[str(message.chat.id)])
 		ALL_NEWS[str(message.chat.id)] = await news.search(message.text)
 		markup = types.ReplyKeyboardMarkup(
 			resize_keyboard=True, keyboard=[
@@ -697,7 +846,23 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'news': (States.READING_NEWS[0], reading_news),
 		'settings': (States.SETTINGS[0], settings),
 		'mail_settings': (States.MAIL_SETTINGS[0], back_to_settings),
-		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], back_to_settings)
+		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], back_to_settings),
+		'search_stocks': (States.SEARCH_STOCKS[0], search_stocks),
+		'invest': (States.STOCKS_CASE[0], choosing_curr)
+	}
+	st = states[await BotDB.get_status(message.chat.id)]
+	await state.set_state(st[0])
+	await st[1](message, state)
+
+
+@dp.callback_query_handler()
+async def all_callback(message: types.Message, state: FSMContext):
+	states = {
+		'curr': (States.CURRENCY[0], curr_),
+		'news': (States.READING_NEWS[0], choosing_categories_news),
+		'mail_settings': (States.MAIL_SETTINGS[0], set_mode),
+		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], set_pers_curr),
+		'invest': (States.STOCKS_CASE[0], stocks_case),
 	}
 	st = states[await BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
@@ -707,6 +872,19 @@ async def all_cmd(message: types.Message, state: FSMContext):
 def save_all():
 	t1 = Thread(target=save_news)
 	t1.start()
+
+	t2 = Thread(target=save_stocks)
+	t2.start()
+
+
+def save_stocks():
+	global ALL_STOCKS
+	data = '' # investing.save_all_stocks()
+	if data:
+		ALL_STOCKS = data
+	else:
+		with open('data/stocks_data.json', encoding='utf-8') as json_file:
+			ALL_STOCKS = json.load(json_file)
 
 
 def save_news():

@@ -31,7 +31,8 @@ TOPIC	TEXT,
 ARTICLE	INT,
 MODES	TEXT,
 BIRTHDAY	TEXT,
-CURR	TEXT);'''
+CURR	TEXT
+STOCKS	TEXT);'''
 			self.cursor.execute(create_table_query1)
 			self.conn.commit()
 			print('БД успешно создана')
@@ -42,10 +43,10 @@ CURR	TEXT);'''
 		self.cursor.execute("SELECT * FROM trackers WHERE user_id = %s", (user_id,))
 		return bool(len(self.cursor.fetchall()))
 
-	async def add_user(self, user_id, status, name, username, znak, modes, curr):
+	async def add_user(self, user_id, status, name, username, znak, modes, curr, stocks):
 		self.cursor.execute(
-			"""INSERT INTO trackers (user_id, name, status, username, znak, modes, curr) VALUES
-			(%s, %s, %s, %s, %s, %s, %s)""", (user_id, name, status, username, znak, modes, curr))
+			"""INSERT INTO trackers (user_id, name, status, username, znak, modes, curr, stocks) VALUES
+			(%s, %s, %s, %s, %s, %s, %s, %s)""", (user_id, name, status, username, znak, modes, curr, stocks))
 		return self.conn.commit()
 
 	async def update_status(self, user_id, new_status):
@@ -109,12 +110,12 @@ CURR	TEXT);'''
 		self.cursor.execute("SELECT birthday FROM trackers WHERE user_id = %s", (user_id,))
 		return self.cursor.fetchone()[0]
 
-	async def update_case(self, user_id, stonk):
-		self.cursor.execute("UPDATE trackers SET case_ = %s WHERE user_id = %s", (stonk, user_id))
+	async def update_stocks(self, user_id, stocks):
+		self.cursor.execute("UPDATE trackers SET stocks = %s WHERE user_id = %s", (stocks, user_id))
 		return self.conn.commit()
 
-	async def get_case(self, user_id):
-		self.cursor.execute("SELECT case_ FROM trackers WHERE user_id = %s", (user_id,))
+	async def get_stocks(self, user_id):
+		self.cursor.execute("SELECT stocks FROM trackers WHERE user_id = %s", (user_id,))
 		return self.cursor.fetchone()[0]
 
 
