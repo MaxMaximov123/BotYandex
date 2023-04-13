@@ -544,7 +544,7 @@ async def search_stocks(message: types.Message, state: FSMContext):
 				callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}")])
 
 		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
-		await message.answer(f'Вот все, что удалось найти: {min(5, len(kb))}/{len(kb)}', reply_markup=markup)
+		await message.answer(f'Вот все, что удалось найти: {min(5, len(kb)-1)}/{len(kb)-1}', reply_markup=markup)
 
 
 @dp.callback_query_handler(state=States.SEARCH_STOCKS)
