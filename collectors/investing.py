@@ -6,7 +6,6 @@ from threading import Thread
 from tqdm import tqdm
 from scripts import config
 import asyncio
-import websocket
 
 LOG_LEVEL = logging.INFO
 LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
