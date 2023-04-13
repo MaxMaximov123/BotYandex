@@ -36,6 +36,7 @@ SEARCH_STOCKS_RESULTS = {}
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
 
+
 def shorten_url(url):
 	return pyshorteners.Shortener().clckru.short(url)
 
@@ -426,25 +427,82 @@ async def choosing_curr(message: types.Message, state: FSMContext):
 async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 	home = types.KeyboardButton(text="Меню↩")
 	back = types.KeyboardButton(text="⬅Назад")
-	markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[home, back]])
+	markup1 = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[back, home]])
 	await callback.message.answer("'⬅Назад', чтобы вернуться в портфель", reply_markup=markup1)
 	if callback.data == 'search':
 		await callback.message.answer('<i><b>Введите название акции</b></i>')
 		await state.set_state(States.SEARCH_STOCKS[0])
 		await BotDB.update_status(callback.message.chat.id, 'search_stocks')
-	else:
+	elif callback.data in ALL_STOCKS:
+		await state.set_state(States.MY_STOCK[0])
+		await BotDB.update_status(callback.message.chat.id, 'my_stock')
 		img = 'https://sun6-23.userapi.com/s/v1/if1/u29aYlOqhDgglHmvgRkT2IAZ3VmLxjh5djPTew1KTBMcFdrHuPhSZpsaYOCE02O_xeaRhsCm.jpg?size=809x810&quality=96&crop=37,0,809,810&ava=1'
 		if ALL_STOCKS[callback.data]["img"]:
 			img = f'https://s3-symbol-logo.tradingview.com/{ALL_STOCKS[callback.data]["img"]}--big.svg'
-		print(img)
-		await bot.send_photo(
-			callback.message.chat.id, photo=img)
-		await state.set_state(States.MY_STOCK[0])
-		await BotDB.update_status(callback.message.chat.id, 'my_stock')
+			# img = 'https://svgx.ru/svg/1294643.svg'
+
+		kb = [
+			[types.InlineKeyboardButton(
+					text='Удалить🗑',
+					callback_data=f'del_{callback.data}')]
+		]
+
+		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+
+		stock = ALL_STOCKS[callback.data]
+		await callback.message.answer(
+			f'''<b>{callback.data}</b>\n
+<b>dailyd inamic proc</b>:    <i>{stock['daily_dinamic_proc']} %</i>\n
+<b>daily dinamic price</b>:    <i>{stock['daily_dinamic_price']} {stock['cur']}</i>\n
+<b>price</b>:    <i>{stock['price']} {stock['cur']}</i>\n
+<b>turnover</b>:    <i>{stock['turnover']}</i>\n
+<b>field</b>: <i>{stock['field']}</i>''',
+			reply_markup=markup
+		)
+
+
+@dp.callback_query_handler(state=States.MY_STOCK)
+async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
+	msg_kb = callback.message.reply_markup.inline_keyboard
+	if callback.data[0] == 'N':
+		msg_kb[-1] = [
+			types.InlineKeyboardButton(
+				text='Удалить🗑',
+				callback_data=f'del_{callback.data[2:]}')
+		]
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
+		)
+	elif callback.data[0] == 'Y':
+		pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';')
+		pers_stocks.remove(callback.data[2:])
+		await BotDB.update_stocks(callback.message.chat.id, ';'.join(pers_stocks))
+		callback.message.text = 'Инвестиции📈'
+		await choosing_in_menu(callback.message, state)
+	elif callback.data.startswith('del_'):
+		msg_kb[-1] = [
+			types.InlineKeyboardButton(
+				text='Да✅',
+				callback_data=f'Y_{callback.data[4:]}'),
+			types.InlineKeyboardButton(
+				text='Удалить?',
+				callback_data='0'),
+			types.InlineKeyboardButton(
+				text='Нет❌',
+				callback_data=f'N_{callback.data[4:]}'),
+		]
+		await bot.edit_message_reply_markup(
+			callback.message.chat.id,
+			callback.message.message_id,
+			reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
+		)
+
 
 
 @dp.message_handler(state=States.MY_STOCK)
-async def search_stocks(message: types.Message, state: FSMContext):
+async def my_stock(message: types.Message, state: FSMContext):
 	if message.text == 'Меню↩':
 		await menu(message)
 	elif message.text == '⬅Назад':
@@ -468,7 +526,7 @@ async def search_stocks(message: types.Message, state: FSMContext):
 		for i in ALL_STOCKS:
 			title = message.text.lower()
 			tit, name = [j.lower() for j in i.split(' | ')]
-			if title in i or title in tit or tit in title or name in title or title in name:
+			if title in i or title in tit or name in title or title in name:
 				text = i
 				data = i
 				if i in pers_stocks:
@@ -537,7 +595,8 @@ async def results_stocks_list(callback: types.CallbackQuery, state: FSMContext):
 		res = SEARCH_STOCKS_RESULTS[str(callback.message.chat.id)]
 		pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';')
 		msg_kb = callback.message.reply_markup.inline_keyboard
-		for [i] in msg_kb:
+		for i in msg_kb:
+			i = i[0]
 			if callback.data == i.callback_data:
 				if i.text[-1] == '✅':
 					i.text = i.text[:-1]
@@ -866,7 +925,8 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'mail_settings': (States.MAIL_SETTINGS[0], back_to_settings),
 		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], back_to_settings),
 		'search_stocks': (States.SEARCH_STOCKS[0], search_stocks),
-		'invest': (States.STOCKS_CASE[0], choosing_curr)
+		'invest': (States.STOCKS_CASE[0], choosing_curr),
+		'my_stock': (States.MY_STOCK[0], my_stock)
 	}
 	st = states[await BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
@@ -874,17 +934,19 @@ async def all_cmd(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query_handler()
-async def all_callback(message: types.Message, state: FSMContext):
+async def all_callback(callback: types.CallbackQuery, state: FSMContext):
+	print()
 	states = {
 		'curr': (States.CURRENCY[0], curr_),
 		'news': (States.READING_NEWS[0], choosing_categories_news),
 		'mail_settings': (States.MAIL_SETTINGS[0], set_mode),
 		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], set_pers_curr),
 		'invest': (States.STOCKS_CASE[0], stocks_case),
+		'my_stock': (States.MY_STOCK[0], my_stock_btn)
 	}
-	st = states[await BotDB.get_status(message.chat.id)]
+	st = states[await BotDB.get_status(callback.message.chat.id)]
 	await state.set_state(st[0])
-	await st[1](message, state)
+	await st[1](callback, state)
 
 
 def save_all():

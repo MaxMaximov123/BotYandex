@@ -5,6 +5,8 @@ import logging
 from threading import Thread
 from tqdm import tqdm
 from scripts import config
+import asyncio
+import websocket
 
 LOG_LEVEL = logging.INFO
 LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
@@ -47,7 +49,7 @@ def get_stok(country):
 		cont = json.loads(r.text)['data']
 		for i in cont:
 			stonks_ = i['d']
-			title = stonks_[0] + ' | ' + stonks_[1]
+			title = stonks_[0] + ' | ' + stonks_[1] + f' ({country})'
 			if len(str(stonks_[15])) < 4:
 				turnover = str(stonks_[15])
 			elif 7 > len(str(stonks_[15])) >= 4:
@@ -89,4 +91,3 @@ def save_all_stocks():
 
 if __name__ == '__main__':
 	path_ = '../'
-	pprint(len(save_all_stocks()))

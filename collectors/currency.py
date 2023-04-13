@@ -10,7 +10,9 @@ def get():
 	markets = {}
 	for valute in tree.findall('Valute'):
 		markets[valute.find('CharCode').text] = {
-			'val': valute.find('Value').text,
+			'val': float(
+				valute.find('Value').text.replace(',', '.')) / float(
+				valute.find('Nominal').text.replace(',', '.')),
 			'name': valute.find('Name').text
 		}
 	return markets
