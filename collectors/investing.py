@@ -7,11 +7,10 @@ from tqdm import tqdm
 from scripts import config
 import asyncio
 
-LOG_LEVEL = logging.INFO
-LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
+
 logging.basicConfig(
-	level=logging.INFO,
-	format=LOGFORMAT,
+	level=config.LOG_LEVEL,
+	format=config.LOGFORMAT,
 )
 all_stoks = {}
 path_ = ''
@@ -90,3 +89,4 @@ def save_all_stocks():
 
 if __name__ == '__main__':
 	path_ = '../'
+	save_all_stocks()
