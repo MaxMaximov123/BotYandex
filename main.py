@@ -423,6 +423,15 @@ async def choosing_curr(message: types.Message, state: FSMContext):
 		await menu(message)
 
 
+def stock_info(stock):
+	return f'''<b>{stock['logoId']} | {stock['name']} ({stock['country']})</b>\n
+<b>dailyd inamic proc</b>:    <i>{stock['daily_dinamic_proc']} %</i>\n
+<b>daily dinamic price</b>:    <i>{stock['daily_dinamic_price']} {stock['cur']}</i>\n
+<b>price</b>:    <i>{stock['price']} {stock['cur']}</i>\n
+<b>turnover</b>:    <i>{stock['turnover']}</i>\n
+<b>field</b>: <i>{stock['field']}</i>'''
+
+
 @dp.callback_query_handler(state=States.STOCKS_CASE)
 async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 	home = types.KeyboardButton(text="Меню↩")
@@ -436,12 +445,11 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 	elif callback.data in ALL_STOCKS:
 		await state.set_state(States.MY_STOCK[0])
 		await BotDB.update_status(callback.message.chat.id, 'my_stock')
-		img = 'https://sun6-23.userapi.com/s/v1/if1/u29aYlOqhDgglHmvgRkT2IAZ3VmLxjh5djPTew1KTBMcFdrHuPhSZpsaYOCE02O_xeaRhsCm.jpg?size=809x810&quality=96&crop=37,0,809,810&ava=1'
-		if ALL_STOCKS[callback.data]["img"]:
-			img = f'https://s3-symbol-logo.tradingview.com/{ALL_STOCKS[callback.data]["img"]}--big.svg'
-			# img = 'https://svgx.ru/svg/1294643.svg'
 
 		kb = [
+			[types.InlineKeyboardButton(
+					text='Новости📰',
+					callback_data=f'news_{callback.data}')],
 			[types.InlineKeyboardButton(
 					text='Удалить🗑',
 					callback_data=f'del_{callback.data}')]
@@ -451,12 +459,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 
 		stock = ALL_STOCKS[callback.data]
 		await callback.message.answer(
-			f'''<b>{callback.data}</b>\n
-<b>dailyd inamic proc</b>:    <i>{stock['daily_dinamic_proc']} %</i>\n
-<b>daily dinamic price</b>:    <i>{stock['daily_dinamic_price']} {stock['cur']}</i>\n
-<b>price</b>:    <i>{stock['price']} {stock['cur']}</i>\n
-<b>turnover</b>:    <i>{stock['turnover']}</i>\n
-<b>field</b>: <i>{stock['field']}</i>''',
+			stock_info(stock),
 			reply_markup=markup
 		)
 
@@ -498,7 +501,51 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
 			callback.message.message_id,
 			reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
 		)
+	elif callback.data.startswith('news_'):
+		stock = callback.data.split('_')[1]
+		stock_data = ALL_STOCKS[stock]
+		ALL_NEWS[stock] = investing.get_news(
+			stock_market=stock_data['stock_market'],
+			logoId=stock_data['logoId'],
+			img=stock_data['img']
+		)
+		await BotDB.update_status(callback.message.chat.id, "stock_news")
+		await state.set_state(States.READING_STOCK_NEWS[0])
+		markup = types.ReplyKeyboardMarkup(
+			resize_keyboard=True, keyboard=[
+				[
+					types.KeyboardButton(text="⬅Назад"),
+					types.KeyboardButton(text="Меню↩")]
+			]
+		)
+		await callback.message.answer("Нажмите 'назад', чтобы вернуться к акции", reply_markup=markup)
+		await BotDB.update_article(callback.message.chat.id, 0)
+		await BotDB.update_topic(callback.message.chat.id, stock)
+		await send_news(callback.message.chat.id, stock, 0)
 
+
+@dp.message_handler(state=States.READING_STOCK_NEWS)
+async def back_from_reading_news(message: types.Message, state: FSMContext):
+	if message.text == 'Меню↩':
+		await menu(message)
+	elif message.text == '⬅Назад':
+		await state.set_state(States.MY_STOCK[0])
+		await BotDB.update_status(message.chat.id, 'my_stock')
+		stock = ALL_STOCKS[await BotDB.get_topic(message.chat.id)]
+		kb = [
+			[types.InlineKeyboardButton(
+				text='Новости📰',
+				callback_data=f"""news_{stock['logoId']} | {stock['name']} ({stock['country']})""")],
+			[types.InlineKeyboardButton(
+				text='Удалить🗑',
+				callback_data=f"del_{stock['logoId']} | {stock['name']} ({stock['country']})")]
+		]
+
+		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
+		await message.answer(
+			stock_info(stock),
+			reply_markup=markup
+		)
 
 
 @dp.message_handler(state=States.MY_STOCK)
@@ -508,6 +555,15 @@ async def my_stock(message: types.Message, state: FSMContext):
 	elif message.text == '⬅Назад':
 		message.text = 'Инвестиции📈'
 		await choosing_in_menu(message, state)
+
+
+@dp.callback_query_handler(state=States.READING_STOCK_NEWS)
+async def choosing_categories_news_st(callback: types.CallbackQuery, state: FSMContext):
+	if callback.data == 'skip':
+		await send_news(
+			callback.message.chat.id,
+			await BotDB.get_topic(callback.message.chat.id),
+			await BotDB.get_article(callback.message.chat.id))
 
 
 @dp.message_handler(state=States.SEARCH_STOCKS)
@@ -926,7 +982,8 @@ async def all_cmd(message: types.Message, state: FSMContext):
 		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], back_to_settings),
 		'search_stocks': (States.SEARCH_STOCKS[0], search_stocks),
 		'invest': (States.STOCKS_CASE[0], choosing_curr),
-		'my_stock': (States.MY_STOCK[0], my_stock)
+		'my_stock': (States.MY_STOCK[0], my_stock),
+		'stock_news': (States.READING_STOCK_NEWS[0], back_from_reading_news)
 	}
 	st = states[await BotDB.get_status(message.chat.id)]
 	await state.set_state(st[0])
@@ -935,14 +992,15 @@ async def all_cmd(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler()
 async def all_callback(callback: types.CallbackQuery, state: FSMContext):
-	print()
 	states = {
 		'curr': (States.CURRENCY[0], curr_),
 		'news': (States.READING_NEWS[0], choosing_categories_news),
 		'mail_settings': (States.MAIL_SETTINGS[0], set_mode),
 		'pers_curr_settings': (States.PERS_CURR_SETTINGS[0], set_pers_curr),
 		'invest': (States.STOCKS_CASE[0], stocks_case),
-		'my_stock': (States.MY_STOCK[0], my_stock_btn)
+		'my_stock': (States.MY_STOCK[0], my_stock_btn),
+		'stock_news': (States.READING_STOCK_NEWS[0], choosing_categories_news_st)
+
 	}
 	st = states[await BotDB.get_status(callback.message.chat.id)]
 	await state.set_state(st[0])
@@ -959,7 +1017,7 @@ def save_all():
 
 def save_stocks():
 	global ALL_STOCKS
-	data = investing.save_all_stocks()
+	data = 0#investing.save_all_stocks()
 	if data:
 		ALL_STOCKS = data
 	else:
@@ -969,7 +1027,7 @@ def save_stocks():
 
 def save_news():
 	global ALL_NEWS
-	data = news.save_all_news()
+	data = 0#news.save_all_news()
 	if data:
 		ALL_NEWS = data
 	else:

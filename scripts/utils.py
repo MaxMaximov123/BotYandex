@@ -15,6 +15,7 @@ class States(Helper):
     STOCKS_CASE = ListItem()
     SEARCH_STOCKS = ListItem()
     MY_STOCK = ListItem()
+    READING_STOCK_NEWS = ListItem()
 
 
 
