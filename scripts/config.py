@@ -4,8 +4,6 @@ import os
 from decouple import config
 
 
-print(os.environ)
-
 BETA_TOKEN = config("BETA_TOKEN")
 REALISE_TOKEN = config("REALISE_TOKEN")
 
