@@ -1,8 +1,13 @@
 import datetime
 import logging
+import os
+from decouple import config
 
-BETA_TOKEN = "5149866452:AAGx1cymIUtKcOqWwajMOr5RNj7I5QdKlZA"
-REALISE_TOKEN = '5663602666:AAENpFtmuiFjiHLp2BB-yEg3wnqmF2ltw78'
+
+print(os.environ)
+
+BETA_TOKEN = config("BETA_TOKEN")
+REALISE_TOKEN = config("REALISE_TOKEN")
 
 LOG_LEVEL = logging.INFO
 LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
