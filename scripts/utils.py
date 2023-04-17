@@ -18,6 +18,5 @@ class States(Helper):
     READING_STOCK_NEWS = ListItem()
 
 
-
 if __name__ == '__main__':
     print(States.all())

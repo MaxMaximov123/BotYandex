@@ -458,8 +458,10 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 		markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 
 		stock = ALL_STOCKS[callback.data]
-		await callback.message.answer(
-			stock_info(stock),
+		await bot.edit_message_text(
+			chat_id=callback.message.chat.id,
+			message_id=callback.message.message_id,
+			text=stock_info(stock),
 			reply_markup=markup
 		)
 
