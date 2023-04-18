@@ -28,10 +28,7 @@ def get_stok(country):
             "volume", "Value.Traded", "market_cap_basic", "fundamental_currency_code",
             "price_earnings_ttm", "earnings_per_share_basic_ttm", "number_of_employees", "sector",
             "market"],
-        "filter": [
-            {"left": "typespecs", "operation": "has", "right": "common"},
-            {"left": "typespecs", "operation": "has_none_of", "right": "foreign-issuer"},
-            {"left": "type", "operation": "equal", "right": "stock"}],
+        "filter": [],
         "filterOR": [],
         "ignore_unknown_fields": False,
         "options": {"active_symbols_only": True, "lang": "ru"},
@@ -39,7 +36,8 @@ def get_stok(country):
         "range": [0, 9999999],
         "sort": {"sortBy": "name", "sortOrder": "asc"},
         "symbols": {"query": {"types": []}, "tickers": []},
-        "markets": [country]}
+        # "typespecs": ['preferred', 'common'],
+        "markets": []}
 
     # ПОЛУЧЕНИЕ ДАННЫХ
     try:
@@ -125,5 +123,5 @@ def get_news(stock_market, logoId, img, save_img=False):
 
 if __name__ == '__main__':
     path_ = '../'
-    pprint(get_news('MOEX', 'SBER', 'sberbank'))
-    # save_all_stocks()
+    save_all_stocks()
+    pprint(len(all_stoks))
