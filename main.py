@@ -441,7 +441,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.answer('<i><b>Введите название акции</b></i>')
         await state.set_state(States.SEARCH_STOCKS[0])
         await BotDB.update_status(callback.message.chat.id, 'search_stocks')
-    elif callback.data in ALL_STOCKS:
+    elif LOC_STOCK_KEYS[callback.data] in ALL_STOCKS:
         await state.set_state(States.MY_STOCK[0])
         await BotDB.update_status(callback.message.chat.id, 'my_stock')
 
@@ -456,7 +456,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 
-        stock = ALL_STOCKS[callback.data]
+        stock = ALL_STOCKS[LOC_STOCK_KEYS[callback.data]]
         await bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
