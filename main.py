@@ -97,7 +97,7 @@ async def send_mail(user_id):
 		await birthday(user_id)
 		true_modes = await BotDB.get_modes(user_id)
 		modes = true_modes.split(';')
-		if modes:
+		if all(modes):
 			await bot.send_message(user_id, "<i><b>Утренние новости☕️📰:</b></i>")
 			if '2' in modes:
 				try:
