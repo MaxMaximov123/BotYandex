@@ -1019,7 +1019,7 @@ def save_all():
 
 def save_stocks():
 	global ALL_STOCKS
-	data = 0#investing.save_all_stocks()
+	data = investing.save_all_stocks()
 	if data:
 		ALL_STOCKS = data
 	else:
@@ -1029,7 +1029,7 @@ def save_stocks():
 
 def save_news():
 	global ALL_NEWS
-	data = 0#news.save_all_news()
+	data = news.save_all_news()
 	if data:
 		ALL_NEWS = data
 	else:
