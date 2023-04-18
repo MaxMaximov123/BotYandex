@@ -247,7 +247,7 @@ async def welcome(message: types.Message, state: FSMContext):
 	try:
 		data = list(map(int, message.text.split(".")))
 	except ValueError as e:
-		await message.answer("Введены невенрные данные, попробуйте еще раз")
+		await message.answer("Введены неверные данные, попробуйте еще раз")
 		return
 	await BotDB.add_birth(message.chat.id, message.text)
 	if len(data) == 2 and 0 < data[0] < 32 and 0 < data[1] < 13:
