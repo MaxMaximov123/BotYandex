@@ -519,14 +519,6 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         )
         await BotDB.update_status(callback.message.chat.id, "stock_news")
         await state.set_state(States.READING_STOCK_NEWS[0])
-        markup = types.ReplyKeyboardMarkup(
-            resize_keyboard=True, keyboard=[
-                [
-                    types.KeyboardButton(text="⬅Назад"),
-                    types.KeyboardButton(text="Меню↩")]
-            ]
-        )
-        await callback.message.answer("Нажмите 'назад', чтобы вернуться к акции", reply_markup=markup)
         await BotDB.update_article(callback.message.chat.id, 0)
         await BotDB.update_topic(callback.message.chat.id, stock)
         await send_news(callback.message.chat.id, stock, 0)
@@ -534,10 +526,11 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         stock = callback.data.split('_')[1]
         stock_data = ALL_STOCKS[LOC_STOCK_KEYS[stock]]
         key = f'{stock_data["stock_market"]}:{stock_data["logoId"]}'
-        t = Thread(target=web_socket.subscribe_on_stock, args=(
-            key,
-            LIVE_DATA_STOCKS))
-        t.start()
+        if key not in LIVE_DATA_STOCKS:
+            t = Thread(target=web_socket.subscribe_on_stock, args=(
+                key,
+                LIVE_DATA_STOCKS))
+            t.start()
         await asyncio.sleep(1)
         msg = (await callback.message.answer('Данные:'))
         LIVE_USERS_STOCKS[callback.message.chat.id] = {
@@ -550,22 +543,32 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
 
 
 async def check_live(user_id):
-    while LIVE_USERS_STOCKS[user_id]:
+    while user_id in LIVE_USERS_STOCKS and LIVE_USERS_STOCKS[user_id]:
         user_d = LIVE_USERS_STOCKS[user_id]
         if LIVE_DATA_STOCKS[user_d['key']] != user_d['data']:
-            LIVE_USERS_STOCKS[user_id]['data'] = LIVE_DATA_STOCKS[user_d['key']]
             await send_live_stock_info(user_d['msg'], user_d['key'])
-        await asyncio.sleep(1.2)
+            LIVE_USERS_STOCKS[user_id]['data'] = LIVE_DATA_STOCKS[user_d['key']]
+        await asyncio.sleep(1)
+
+
+def up_down(p1, p2):
+    if p1 > p2:
+        return '🔺'
+    elif p2 > p1:
+        return '🔻'
+    else:
+        return ''
 
 
 async def send_live_stock_info(message, stock_name):
     if LIVE_DATA_STOCKS[stock_name]:
         info = LIVE_DATA_STOCKS[stock_name]
+        last_info = LIVE_USERS_STOCKS[message.chat.id]['data']
         text = f"""<b>{stock_name}</b>
         
-Цена: <b>{info['lp']} {info['currency_code']}</b>
+Цена: <b>{info['lp']} {info['currency_code']}{up_down(info['lp'], last_info['lp'])}</b>
 
-Динам: <b>{info['chp']}% | {info['ch']} {info['currency_code']}</b>
+Динам: <b>{info['chp']}% | {info['ch']} {info['currency_code']}{up_down(info['chp'], last_info['chp'])}</b>
 
 Цена открытия: <b>{info['open_price']}</b>
 
@@ -573,9 +576,8 @@ async def send_live_stock_info(message, stock_name):
 
 Макс: <b>{info['high_price']}</b>
 
-Время: {datetime.datetime.utcfromtimestamp(info['lp_time']).strftime('%Y-%m-%d %H:%M:%S:%MS')}
+Обновлениеие(свой час. пояс): {datetime.datetime.utcfromtimestamp(info['lp_time']).strftime(f'%Y-%m-%d %H:%M:%S:{random.randint(0, 100)}')}
 """
-        print(text, LIVE_USERS_STOCKS[message.chat.id]['msg'].text)
         if text != LIVE_USERS_STOCKS[message.chat.id]['msg'].text:
             msg1 = (await bot.edit_message_text(
                 chat_id=message.chat.id,
@@ -616,6 +618,17 @@ async def my_stock(message: types.Message, state: FSMContext):
     elif message.text == '⬅Назад':
         message.text = 'Инвестиции📈'
         await choosing_in_menu(message, state)
+
+    if message.text == 'Меню↩' or message.text == '⬅Назад':
+        if message.chat.id in LIVE_USERS_STOCKS:
+            name_st = LIVE_USERS_STOCKS[message.chat.id]['key']
+            count = 0
+            for i, val in LIVE_USERS_STOCKS.items():
+                if val['key'] == name_st:
+                    count += 1
+            if count <= 1:
+                LIVE_DATA_STOCKS[name_st] = 'stop'
+            del LIVE_USERS_STOCKS[message.chat.id]
 
 
 @dp.callback_query_handler(state=States.READING_STOCK_NEWS)

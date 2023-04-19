@@ -54,6 +54,8 @@ def merge_dicts(*dicts):
 
 
 def on_message(data, name, ws, message):
+    if data[name] == 'stop':
+        ws.close()
     if '{' not in message:
         ws.send(message)
     else:
@@ -81,8 +83,9 @@ def on_open(name, key, ws):
     ws.send('~m~34~m~{"m":"set_locale","p":["ru","RU"]}')
     ws.send('~m~52~m~{"m":"quote_create_session","p":["' + key + '"]}')
 
+    s = '{"m":"quote_set_fields","p":["' + key + '","base-currency-logoid","ch","chp","currency-logoid","currency_code","currency_id","base_currency_id","current_session","description","format","language","local_description","listed_exchange","logoid","lp","lp_time","original_name","pricescale","pro_name","short_name","type","typespecs","update_mode","volume","value_unit_id","ask","bid","fundamentals","high_price","is_tradable","low_price","open_price","prev_close_price","status","basic_eps_net_income","beta_1_year","earnings_per_share_basic_ttm","industry","price_earnings_ttm","sector","volume","dividends_yield","timezone"]}'
     ws.send(
-        '~m~735~m~{"m":"quote_set_fields","p":["' + key + '","base-currency-logoid","ch","chp","currency-logoid","currency_code","currency_id","base_currency_id","current_session","description","exchange","format","fractional","is_tradable","language","local_description","listed_exchange","logoid","lp","lp_time","minmov","minmove2","original_name","pricescale","pro_name","short_name","type","typespecs","update_mode","volume","value_unit_id","ask","bid","fundamentals","high_price","is_tradable","low_price","open_price","prev_close_price","rch","rchp","rtc","rtc_time","status","basic_eps_net_income","beta_1_year","earnings_per_share_basic_ttm","industry","market_cap_basic","price_earnings_ttm","sector","volume","dividends_yield","timezone"]}')
+        '~m~' + str(len(s)) + '~m~{"m":"quote_set_fields","p":["' + key + '","base-currency-logoid","ch","chp","currency-logoid","currency_code","currency_id","base_currency_id","current_session","description","format","language","local_description","listed_exchange","logoid","lp","lp_time","original_name","pricescale","pro_name","short_name","type","typespecs","update_mode","volume","value_unit_id","ask","bid","fundamentals","high_price","is_tradable","low_price","open_price","prev_close_price","status","basic_eps_net_income","beta_1_year","earnings_per_share_basic_ttm","industry","price_earnings_ttm","sector","volume","dividends_yield","timezone"]}')
     ws.send('~m~' + str(52 + len(name)) + '~m~{"m":"quote_add_symbols","p":["' + key + '","' + name + '"]}')
 
 
