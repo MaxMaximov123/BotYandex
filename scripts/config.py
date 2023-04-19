@@ -7,7 +7,7 @@ from decouple import config
 BETA_TOKEN = config("BETA_TOKEN")
 REALISE_TOKEN = config("REALISE_TOKEN")
 
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
 
 SEND_TIME = datetime.time(hour=5, minute=0, second=0)

@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 from pprint import pprint
 
 from aiogram import Bot, types
@@ -23,8 +24,9 @@ from scripts.db import BotDB
 import asyncio
 import functools
 from collectors import horoscope, currency, news, investing
+from collectors import web_socket
 
-bot = Bot(token=config.REALISE_TOKEN, parse_mode=types.ParseMode.HTML)
+bot = Bot(token=config.BETA_TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -33,6 +35,8 @@ filters = FiltersFactory(dp)
 ALL_NEWS = {}
 ALL_STOCKS = {}
 SEARCH_STOCKS_RESULTS = {}
+LIVE_DATA_STOCKS = {}
+LIVE_USERS_STOCKS = {}
 LOC_STOCK_KEYS = {}
 zodiac_signs = list(config.zodiac_signs_links.keys())
 
@@ -447,6 +451,9 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 
         kb = [
             [types.InlineKeyboardButton(
+                text='Live',
+                callback_data=f'live_{callback.data}')],
+            [types.InlineKeyboardButton(
                 text='Новости📰',
                 callback_data=f'news_{callback.data}')],
             [types.InlineKeyboardButton(
@@ -523,6 +530,59 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         await BotDB.update_article(callback.message.chat.id, 0)
         await BotDB.update_topic(callback.message.chat.id, stock)
         await send_news(callback.message.chat.id, stock, 0)
+    elif callback.data.startswith('live_'):
+        stock = callback.data.split('_')[1]
+        stock_data = ALL_STOCKS[LOC_STOCK_KEYS[stock]]
+        key = f'{stock_data["stock_market"]}:{stock_data["logoId"]}'
+        t = Thread(target=web_socket.subscribe_on_stock, args=(
+            key,
+            LIVE_DATA_STOCKS))
+        t.start()
+        await asyncio.sleep(1)
+        msg = (await callback.message.answer('Данные:'))
+        LIVE_USERS_STOCKS[callback.message.chat.id] = {
+            'key': key,
+            'data': LIVE_DATA_STOCKS[key],
+            'msg': msg
+        }
+        await send_live_stock_info(msg, key)
+        await check_live(msg.chat.id)
+
+
+async def check_live(user_id):
+    while LIVE_USERS_STOCKS[user_id]:
+        user_d = LIVE_USERS_STOCKS[user_id]
+        if LIVE_DATA_STOCKS[user_d['key']] != user_d['data']:
+            LIVE_USERS_STOCKS[user_id]['data'] = LIVE_DATA_STOCKS[user_d['key']]
+            await send_live_stock_info(user_d['msg'], user_d['key'])
+        await asyncio.sleep(1.2)
+
+
+async def send_live_stock_info(message, stock_name):
+    if LIVE_DATA_STOCKS[stock_name]:
+        info = LIVE_DATA_STOCKS[stock_name]
+        text = f"""<b>{stock_name}</b>
+        
+Цена: <b>{info['lp']} {info['currency_code']}</b>
+
+Динам: <b>{info['chp']}% | {info['ch']} {info['currency_code']}</b>
+
+Цена открытия: <b>{info['open_price']}</b>
+
+Мин: <b>{info['low_price']}</b>
+
+Макс: <b>{info['high_price']}</b>
+
+Время: {datetime.datetime.utcfromtimestamp(info['lp_time']).strftime('%Y-%m-%d %H:%M:%S:%MS')}
+"""
+        print(text, LIVE_USERS_STOCKS[message.chat.id]['msg'].text)
+        if text != LIVE_USERS_STOCKS[message.chat.id]['msg'].text:
+            msg1 = (await bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                text=text,
+            ))
+            LIVE_USERS_STOCKS[msg1.chat.id]['msg'] = msg1
 
 
 @dp.message_handler(state=States.READING_STOCK_NEWS)
@@ -1022,7 +1082,7 @@ def save_all():
 
 def save_stocks():
     global ALL_STOCKS
-    data = investing.save_all_stocks()
+    data = 0#investing.save_all_stocks()
     if data:
         ALL_STOCKS = data
     else:
