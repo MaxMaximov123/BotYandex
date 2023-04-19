@@ -26,7 +26,7 @@ import functools
 from collectors import horoscope, currency, news, investing
 from collectors import web_socket
 
-bot = Bot(token=config.BETA_TOKEN, parse_mode=types.ParseMode.HTML)
+bot = Bot(token=config.REALISE_TOKEN, parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
