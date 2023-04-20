@@ -523,8 +523,8 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         await BotDB.update_topic(callback.message.chat.id, stock)
         await send_news(callback.message.chat.id, stock, 0)
     elif callback.data.startswith('live_'):
-        stock = callback.data.split('_')[1]
-        stock_data = ALL_STOCKS[LOC_STOCK_KEYS[stock]]
+        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]]
+        stock_data = ALL_STOCKS[stock]
         key = f'{stock_data["stock_market"]}:{stock_data["logoId"]}'
         if key not in LIVE_DATA_STOCKS:
             t = Thread(target=web_socket.subscribe_on_stock, args=(
