@@ -510,9 +510,9 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
         )
     elif callback.data.startswith('news_'):
-        stock = callback.data.split('_')[1]
-        stock_data = ALL_STOCKS[LOC_STOCK_KEYS[stock]]
-        ALL_NEWS[LOC_STOCK_KEYS[stock]] = investing.get_news(
+        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]
+        stock_data = ALL_STOCKS[stock]
+        ALL_NEWS[stock] = investing.get_news(
             stock_market=stock_data['stock_market'],
             logoId=stock_data['logoId'],
             img=stock_data['img']
@@ -523,7 +523,7 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         await BotDB.update_topic(callback.message.chat.id, stock)
         await send_news(callback.message.chat.id, stock, 0)
     elif callback.data.startswith('live_'):
-        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]]
+        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]
         stock_data = ALL_STOCKS[stock]
         key = f'{stock_data["stock_market"]}:{stock_data["logoId"]}'
         if key not in LIVE_DATA_STOCKS:
