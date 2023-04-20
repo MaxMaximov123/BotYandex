@@ -576,7 +576,8 @@ async def send_live_stock_info(message, stock_name):
 
 Макс: <b>{info['high_price']}</b>
 
-Обновлениеие(свой час. пояс): {datetime.datetime.utcfromtimestamp(info['lp_time']).strftime(f'%Y-%m-%d %H:%M:%S:{random.randint(0, 100)}')}
+Обновлениеие(свой час. пояс):
+{datetime.datetime.utcfromtimestamp(info['lp_time']).strftime(f'%Y-%m-%d %H:%M:%S:{random.randint(0, 100)}')}
 """
         if text != LIVE_USERS_STOCKS[message.chat.id]['msg'].text:
             msg1 = (await bot.edit_message_text(
@@ -627,7 +628,7 @@ async def my_stock(message: types.Message, state: FSMContext):
                 if val['key'] == name_st:
                     count += 1
             if count <= 1:
-                LIVE_DATA_STOCKS[name_st] = 'stop'
+                del LIVE_DATA_STOCKS[name_st]
             del LIVE_USERS_STOCKS[message.chat.id]
 
 

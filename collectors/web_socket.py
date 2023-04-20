@@ -54,8 +54,9 @@ def merge_dicts(*dicts):
 
 
 def on_message(data, name, ws, message):
-    if data[name] == 'stop':
+    if name not in data:
         ws.close()
+        return
     if '{' not in message:
         ws.send(message)
     else:
