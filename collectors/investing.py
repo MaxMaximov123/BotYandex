@@ -16,8 +16,22 @@ all_stoks = {}
 path_ = ''
 
 
+def search_stock(req):
+    url = f'https://symbol-search.tradingview.com/symbol_search' \
+          f'/v3/?text={req}&exchange=&lang=ru&search_type=stocks' \
+          '&domain=production&sort_by_country=RU'
+    data = requests.get(url).json()['symbols']
+    exp_data = []
+    for i in data:
+        exp_data.append({
+            'logoId': f'{i["exchange"]}:{i["symbol"]}',
+            'description': i['description']
+        })
+    return exp_data
+
+
 # ПАРСЕР ДЛЯ СБОРА ДАННЫХ АКЦИЙ
-def get_stok(country):
+def get_stoks_by_country(country):
     global all_stoks
 
     # JSON ДЛЯ ПЛУЧЕНИЯ ДАННЫХ
@@ -72,18 +86,47 @@ def get_stok(country):
         logging.warning(f'{country} | {e}')
 
 
+def get_stoks_by_ligoId(logoId: list):
+    global all_stoks
+
+    if not logoId:
+        return {}
+
+    columns = [
+            "name", "description", "logoid", "update_mode", "close", "currency",
+            "pricescale", "minmov", "minmove2", "change", "change_abs", "Recommend.All",
+            "volume", "Value.Traded", "market_cap_basic", "fundamental_currency_code", "sector",
+            "market"]
+
+    json_ = {
+        "columns": columns,
+        "range": [0, 99999999],
+        "symbols": {"tickers": logoId}}
+
+    # ПОЛУЧЕНИЕ ДАННЫХ
+    try:
+        r = requests.post(f"https://scanner.tradingview.com/global/scan", json=json_)
+        cont = json.loads(r.text)['data']
+        exp_data = {}
+        for i in cont:
+            exp_data[i['s']] = dict([(columns[j], d) for j, d in enumerate(i['d'])])
+        return exp_data
+
+    except Exception as e:
+        logging.warning(f'{logoId} | {e}')
+
+
 def save_all_stocks():
     tasks = []
     logging.info('start getting stocks')
     for i in config.COUNTRIES:
-        tasks.append(Thread(target=get_stok, args=(i,)))
+        tasks.append(Thread(target=get_stoks_by_country(), args=(i,)))
         tasks[-1].start()
     [i.join() for i in tasks]
     logging.info('getting stocks complete')
     with open(f'{path_}data/stocks_data.json', 'w', encoding='utf-8') as f:
         json.dump(all_stoks, f, ensure_ascii=False, indent=4)
     return all_stoks
-
 
 
 # ЗАГОЛОВОК ЗАПРОСА
@@ -98,9 +141,9 @@ head = {
 
 
 # ПОЛУЧЕНИЕ СПИСКА НОВОСТЕЙ
-def get_news(stock_market, logoId, img, save_img=False):
+def get_news(stock, img, save_img=False):
     r = requests.get(f'https://news-headlines.tradingview.com/headlines/'
-                     f'?category=stock&lang=ru&symbol={stock_market}%3A{logoId}', headers=head)
+                     f'?category=stock&lang=ru&symbol={stock.split(":")[0]}%3A{stock.split(":")[1]}', headers=head)
     if save_img and img and not os.path.exists(f'icons/{img}.svg'):
         img_data = requests.get(f'https://s3-symbol-logo.tradingview.com/{img}--big.svg').content
         with open(f'{path_}icons/{img}.svg', 'wb') as handler:
@@ -123,5 +166,7 @@ def get_news(stock_market, logoId, img, save_img=False):
 
 if __name__ == '__main__':
     path_ = '../'
-    save_all_stocks()
-    pprint(len(all_stoks))
+
+    # save_all_stocks()
+    # pprint(len(all_stoks))
+    pprint(get_stoks_by_ligoId(['MOEX:SBER']))

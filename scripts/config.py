@@ -3,10 +3,6 @@ import logging
 import os
 from decouple import config
 
-
-BETA_TOKEN = config("BETA_TOKEN")
-REALISE_TOKEN = config("REALISE_TOKEN")
-
 LOG_LEVEL = logging.DEBUG
 LOGFORMAT = "%(asctime)-4s | %(levelname)-4s | %(message)s"
 

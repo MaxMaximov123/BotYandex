@@ -2,7 +2,7 @@ import logging
 import os
 import random
 from pprint import pprint
-
+from decouple import config as env_config
 from aiogram import Bot, types
 import json
 import pyshorteners
@@ -26,7 +26,9 @@ import functools
 from collectors import horoscope, currency, news, investing
 from collectors import web_socket
 
-bot = Bot(token=config.REALISE_TOKEN, parse_mode=types.ParseMode.HTML)
+
+# BETA_TOKEN/REALISE_TOKEN
+bot = Bot(token=env_config("REALISE_TOKEN"), parse_mode=types.ParseMode.HTML)
 dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
 BotDB = BotDB()
@@ -155,7 +157,7 @@ async def send_news(user_id, topic, article, skip_btn=True):
     if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
         skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
         det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
-        key_b = [[det, skip]] if skip_btn else [[det]]
+        key_b = [[skip, det]] if skip_btn else [[det]]
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
         await bot.send_message(
@@ -396,11 +398,12 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
             text='Добавить акцию❇️',
             callback_data='search')]]
 
-        stocks = [i for i in sorted((await BotDB.get_stocks(message.chat.id)).split(';')) if i]
+        stocks = [i for i in sorted((await BotDB.get_stocks(message.chat.id)).split(';;;')) if i]
+        ALL_STOCKS.update(investing.get_stoks_by_ligoId(stocks))
         for i in stocks:
             kb.append([types.InlineKeyboardButton(
                 text=i,
-                callback_data=ALL_STOCKS[i]['logoId'])])
+                callback_data=i)])
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
         await message.answer("<b>Ваши акции:</b>", reply_markup=markup)
@@ -420,21 +423,31 @@ async def choosing_horoscope(message: types.Message, state: FSMContext):
         await message.answer("Я не понимаю")
 
 
-@dp.message_handler(state=States.CURRENCY + States.STOCKS_CASE + States.CURRENCY)
+@dp.message_handler(state=States.CURRENCY + States.STOCKS_CASE)
 async def choosing_curr(message: types.Message, state: FSMContext):
     if message.text == 'Меню↩':
         await menu(message)
 
 
+# СООЩЕНИЕ С ДАННЫМИ АКЦИИ
 def stock_info(stock):
-    return f'''<b>{stock['logoId']} | {stock['name']} ({stock['country']})</b>\n
-<b>dailyd inamic proc</b>:    <i>{stock['daily_dinamic_proc']} %</i>\n
-<b>daily dinamic price</b>:    <i>{stock['daily_dinamic_price']} {stock['cur']}</i>\n
-<b>price</b>:    <i>{stock['price']} {stock['cur']}</i>\n
-<b>turnover</b>:    <i>{stock['turnover']}</i>\n
-<b>field</b>: <i>{stock['field']}</i>'''
+    if len(str(stock['volume'])) < 4:
+        turnover = str(stock['volume'])
+    elif 7 > len(str(stock['volume'])) >= 4:
+        turnover = str(round(stock['volume'] / 1000, 3)) + 'K'
+    elif 10 > len(str(stock['volume'])) >= 7:
+        turnover = str(round(stock['volume'] / 1000000, 3)) + 'M'
+    else:
+        turnover = str(round(stock['volume'] / 1000000000, 3)) + 'B'
+    return f'''<b>{stock['logoid']} | {stock['name']} ({stock['market']})</b>\n
+<b>dailyd dinamic proc</b>:    <i>{round(stock['change'], 2)} %</i>\n
+<b>daily dinamic price</b>:    <i>{stock['change_abs']} {stock['currency']}</i>\n
+<b>price</b>:    <i>{stock['close']} {stock['currency']}</i>\n
+<b>turnover</b>:    <i>{turnover}</i>\n
+<b>field</b>: <i>{stock['sector']}</i>'''
 
 
+# АКЦИЯ ПОРТФЕЛЯ
 @dp.callback_query_handler(state=States.STOCKS_CASE)
 async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
     home = types.KeyboardButton(text="Меню↩")
@@ -445,7 +458,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.answer('<i><b>Введите название акции</b></i>')
         await state.set_state(States.SEARCH_STOCKS[0])
         await BotDB.update_status(callback.message.chat.id, 'search_stocks')
-    elif LOC_STOCK_KEYS[callback.data] in ALL_STOCKS:
+    elif callback.data in ALL_STOCKS:
         await state.set_state(States.MY_STOCK[0])
         await BotDB.update_status(callback.message.chat.id, 'my_stock')
 
@@ -463,7 +476,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
 
-        stock = ALL_STOCKS[LOC_STOCK_KEYS[callback.data]]
+        stock = ALL_STOCKS[callback.data]
         await bot.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.message_id,
@@ -472,6 +485,7 @@ async def stocks_case(callback: types.CallbackQuery, state: FSMContext):
         )
 
 
+# РЕЖИМЫ АКЦИИ
 @dp.callback_query_handler(state=States.MY_STOCK)
 async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
     msg_kb = callback.message.reply_markup.inline_keyboard
@@ -479,7 +493,7 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         msg_kb[-1] = [
             types.InlineKeyboardButton(
                 text='Удалить🗑',
-                callback_data=f'del_{callback.data[2:]}')
+                callback_data=f'del_{callback.data.split("_")[1]}')
         ]
         await bot.edit_message_reply_markup(
             callback.message.chat.id,
@@ -487,22 +501,22 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
         )
     elif callback.data[0] == 'Y':
-        pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';')
-        pers_stocks.remove(LOC_STOCK_KEYS[callback.data[2:]])
-        await BotDB.update_stocks(callback.message.chat.id, ';'.join(pers_stocks))
+        pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';;;')
+        pers_stocks.remove(callback.data.split('_')[1])
+        await BotDB.update_stocks(callback.message.chat.id, ';;;'.join(pers_stocks))
         callback.message.text = 'Инвестиции📈'
         await choosing_in_menu(callback.message, state)
     elif callback.data.startswith('del_'):
         msg_kb[-1] = [
             types.InlineKeyboardButton(
                 text='Да✅',
-                callback_data=f'Y_{callback.data[4:]}'),
+                callback_data=f'Y_{callback.data.split("_")[1]}'),
             types.InlineKeyboardButton(
                 text='Удалить?',
                 callback_data='0'),
             types.InlineKeyboardButton(
                 text='Нет❌',
-                callback_data=f'N_{callback.data[4:]}'),
+                callback_data=f'N_{callback.data.split("_")[1]}'),
         ]
         await bot.edit_message_reply_markup(
             callback.message.chat.id,
@@ -510,12 +524,11 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=msg_kb)
         )
     elif callback.data.startswith('news_'):
-        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]
+        stock = callback.data.split('_')[1]
         stock_data = ALL_STOCKS[stock]
         ALL_NEWS[stock] = investing.get_news(
-            stock_market=stock_data['stock_market'],
-            logoId=stock_data['logoId'],
-            img=stock_data['img']
+            stock=stock,
+            img=stock_data['logoid']
         )
         await BotDB.update_status(callback.message.chat.id, "stock_news")
         await state.set_state(States.READING_STOCK_NEWS[0])
@@ -523,22 +536,21 @@ async def my_stock_btn(callback: types.CallbackQuery, state: FSMContext):
         await BotDB.update_topic(callback.message.chat.id, stock)
         await send_news(callback.message.chat.id, stock, 0)
     elif callback.data.startswith('live_'):
-        stock = LOC_STOCK_KEYS[callback.data.split('_')[1]]
+        stock = callback.data.split('_')[1]
         stock_data = ALL_STOCKS[stock]
-        key = f'{stock_data["stock_market"]}:{stock_data["logoId"]}'
-        if key not in LIVE_DATA_STOCKS:
+        if stock not in LIVE_DATA_STOCKS:
             t = Thread(target=web_socket.subscribe_on_stock, args=(
-                key,
+                stock,
                 LIVE_DATA_STOCKS))
             t.start()
         await asyncio.sleep(1)
         msg = (await callback.message.answer('Данные:'))
         LIVE_USERS_STOCKS[callback.message.chat.id] = {
-            'key': key,
-            'data': LIVE_DATA_STOCKS[key],
+            'key': stock,
+            'data': LIVE_DATA_STOCKS[stock],
             'msg': msg
         }
-        await send_live_stock_info(msg, key)
+        await send_live_stock_info(msg, stock)
         await check_live(msg.chat.id)
 
 
@@ -561,7 +573,7 @@ def up_down(p1, p2):
 
 
 async def send_live_stock_info(message, stock_name):
-    if LIVE_DATA_STOCKS[stock_name]:
+    if stock_name in LIVE_DATA_STOCKS and LIVE_DATA_STOCKS[stock_name]:
         info = LIVE_DATA_STOCKS[stock_name]
         last_info = LIVE_USERS_STOCKS[message.chat.id]['data']
         text = f"""<b>{stock_name}</b>
@@ -577,7 +589,7 @@ async def send_live_stock_info(message, stock_name):
 Макс: <b>{info['high_price']}</b>
 
 Обновлениеие(свой час. пояс):
-{datetime.datetime.utcfromtimestamp(info['lp_time']).strftime(f'%Y-%m-%d %H:%M:%S:{random.randint(0, 100)}')}
+{(datetime.datetime.utcfromtimestamp(info['lp_time']) + datetime.timedelta(hours=3)).strftime(f'%Y-%m-%d %H:%M:%S:{random.randint(0, 100)}')}
 """
         if text != LIVE_USERS_STOCKS[message.chat.id]['msg'].text:
             msg1 = (await bot.edit_message_text(
@@ -595,14 +607,18 @@ async def back_from_reading_news(message: types.Message, state: FSMContext):
     elif message.text == '⬅Назад':
         await state.set_state(States.MY_STOCK[0])
         await BotDB.update_status(message.chat.id, 'my_stock')
-        stock = ALL_STOCKS[await BotDB.get_topic(message.chat.id)]
+        stock = await BotDB.get_topic(message.chat.id)
+        stock_data = ALL_STOCKS[stock]
         kb = [
             [types.InlineKeyboardButton(
+                text='Live',
+                callback_data=f'live_{stock}')],
+            [types.InlineKeyboardButton(
                 text='Новости📰',
-                callback_data=f"""news_{stock['logoId']}""")],
+                callback_data=f"""news_{stock}""")],
             [types.InlineKeyboardButton(
                 text='Удалить🗑',
-                callback_data=f"del_{stock['logoId']}")]
+                callback_data=f"del_{stock}")]
         ]
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
@@ -614,12 +630,6 @@ async def back_from_reading_news(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=States.MY_STOCK)
 async def my_stock(message: types.Message, state: FSMContext):
-    if message.text == 'Меню↩':
-        await menu(message)
-    elif message.text == '⬅Назад':
-        message.text = 'Инвестиции📈'
-        await choosing_in_menu(message, state)
-
     if message.text == 'Меню↩' or message.text == '⬅Назад':
         if message.chat.id in LIVE_USERS_STOCKS:
             name_st = LIVE_USERS_STOCKS[message.chat.id]['key']
@@ -630,6 +640,12 @@ async def my_stock(message: types.Message, state: FSMContext):
             if count <= 1:
                 del LIVE_DATA_STOCKS[name_st]
             del LIVE_USERS_STOCKS[message.chat.id]
+
+    if message.text == 'Меню↩':
+        await menu(message)
+    elif message.text == '⬅Назад':
+        message.text = 'Инвестиции📈'
+        await choosing_in_menu(message, state)
 
 
 @dp.callback_query_handler(state=States.READING_STOCK_NEWS)
@@ -653,21 +669,19 @@ async def search_stocks(message: types.Message, state: FSMContext):
         slice_ = (0, 5)
         step = 5
         kb = []
-        pers_stocks = (await BotDB.get_stocks(message.chat.id)).split(';')
-        for i in ALL_STOCKS:
-            title = message.text.lower()
-            tit, name = [j.lower() for j in i.split(' | ')]
-            if title in i or title in tit or name in title or title in name:
-                text = i
-                data = ALL_STOCKS[i]['logoId']
-                if i in pers_stocks:
-                    text = '✅' + text
-                    data = '✅' + data
-                kb.append(
-                    [types.InlineKeyboardButton(
-                        text=text,
-                        callback_data=data)])
+        pers_stocks = (await BotDB.get_stocks(message.chat.id)).split(';;;')
+        for i in investing.search_stock(message.text):
+            text = i['logoId']
+            data = i['logoId']
+            if i['logoId'] in pers_stocks:
+                text = '✅' + i['logoId']
+                data = '✅' + i['logoId']
+            kb.append(
+                [types.InlineKeyboardButton(
+                    text=text,
+                    callback_data=data)])
         SEARCH_STOCKS_RESULTS[str(message.chat.id)] = kb
+        ln = len(kb)
         kb = kb[:5]
         kb.append([
             types.InlineKeyboardButton(
@@ -675,7 +689,7 @@ async def search_stocks(message: types.Message, state: FSMContext):
                 callback_data=f"slice_{slice_[0] + step}_{slice_[1] + step}")])
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
-        await message.answer(f'Вот все, что удалось найти: {min(5, len(kb) - 1)}/{len(kb) - 1}', reply_markup=markup)
+        await message.answer(f'Вот все, что удалось найти: {min(5, ln)}/{ln}', reply_markup=markup)
 
 
 @dp.callback_query_handler(state=States.SEARCH_STOCKS)
@@ -722,12 +736,9 @@ async def results_stocks_list(callback: types.CallbackQuery, state: FSMContext):
         else:
             await callback.message.answer('Извините, я забыл результаты поиска, попробуйте еще раз')
 
-    elif (
-            LOC_STOCK_KEYS.get(callback.data, '_') in ALL_STOCKS or
-            LOC_STOCK_KEYS.get(callback.data[1:], '_') in ALL_STOCKS
-    ):
+    else:
         res = SEARCH_STOCKS_RESULTS[str(callback.message.chat.id)]
-        pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';')
+        pers_stocks = (await BotDB.get_stocks(callback.message.chat.id)).split(';;;')
         msg_kb = callback.message.reply_markup.inline_keyboard
         for i in msg_kb:
             i = i[0]
@@ -743,7 +754,9 @@ async def results_stocks_list(callback: types.CallbackQuery, state: FSMContext):
                     i.callback_data = '✅' + i.callback_data
 
         for [i] in res:
-            if i.callback_data in callback.data or callback.data in i.callback_data:
+            if (
+                    i.callback_data == callback.data or callback.data[1:] == i.callback_data or
+                    i.callback_data[1:] == callback.data):
                 if i.text[0] == '✅':
                     i.text = i.text[1:]
                     i.callback_data = i.callback_data[1:]
@@ -756,9 +769,7 @@ async def results_stocks_list(callback: types.CallbackQuery, state: FSMContext):
             callback.message.message_id,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=msg_kb)
         )
-        await BotDB.update_stocks(callback.message.chat.id, ';'.join(pers_stocks))
-    else:
-        await callback.message.answer('Извините, я не понимаю')
+        await BotDB.update_stocks(callback.message.chat.id, ';;;'.join(pers_stocks))
 
 
 @dp.message_handler(state=States.MAIL_SETTINGS + States.PERS_CURR_SETTINGS)
@@ -1090,13 +1101,13 @@ def save_all():
     t1 = Thread(target=save_news)
     t1.start()
 
-    t2 = Thread(target=save_stocks)
-    t2.start()
+    # t2 = Thread(target=save_stocks)
+    # t2.start()
 
 
 def save_stocks():
     global ALL_STOCKS
-    data = investing.save_all_stocks()
+    data = 0#investing.save_all_stocks()
     if data:
         ALL_STOCKS = data
     else:

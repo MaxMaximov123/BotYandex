@@ -1,15 +1,16 @@
 import psycopg2
 import asyncio
+from decouple import config
 
 
 class BotDB:
 	def __init__(self):
 		self.conn = psycopg2.connect(
-			user="postgres",
-			password="ccYPnfvO7LXKaf93Fbeu",
-			host="containers-us-west-17.railway.app",
-			port="7535",
-			database="railway")
+			user=config('DB_USER'),
+			password=config('DB_PASSWORD'),
+			host=config('DB_HOST'),
+			port=config('DB_PORT'),
+			database=config('DB_DATABASE'))
 
 		self.cursor = self.conn.cursor()
 
