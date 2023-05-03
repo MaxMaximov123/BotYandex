@@ -399,7 +399,7 @@ async def choosing_in_menu(message: types.Message, state: FSMContext):
             callback_data='search')]]
 
         stocks = [i for i in sorted((await BotDB.get_stocks(message.chat.id)).split(';;;')) if i]
-        ALL_STOCKS.update(investing.get_stoks_by_ligoId(stocks))
+        ALL_STOCKS.update(investing.get_stoks_by_logoId(stocks))
         for i in stocks:
             kb.append([types.InlineKeyboardButton(
                 text=i,
@@ -623,7 +623,7 @@ async def back_from_reading_news(message: types.Message, state: FSMContext):
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=kb)
         await message.answer(
-            stock_info(stock),
+            stock_info(stock_data),
             reply_markup=markup
         )
 

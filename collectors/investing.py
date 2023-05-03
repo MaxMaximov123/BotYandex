@@ -86,7 +86,7 @@ def get_stoks_by_country(country):
         logging.warning(f'{country} | {e}')
 
 
-def get_stoks_by_ligoId(logoId: list):
+def get_stoks_by_logoId(logoId: list):
     global all_stoks
 
     if not logoId:
