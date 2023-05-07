@@ -157,7 +157,7 @@ async def send_news(user_id, topic, article, skip_btn=True):
     if topic in ALL_NEWS and article < len(ALL_NEWS[topic]) - 1 and len(ALL_NEWS[topic]) > 0:
         skip = types.InlineKeyboardButton(text="Дальше", callback_data="skip")
         det = types.InlineKeyboardButton(text='Подробнее', url=shorten_url(ALL_NEWS[topic][article]['url']))
-        key_b = [[skip, det]] if skip_btn else [[det]]
+        key_b = [[det, skip]] if skip_btn else [[det]]
 
         markup = types.InlineKeyboardMarkup(inline_keyboard=key_b)
         await bot.send_message(
