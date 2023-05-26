@@ -20,7 +20,7 @@ class BotDB:
 		if not rows[0]:
 			self.create_table()
 
-	async def create_table(self):
+	def create_table(self):
 		try:
 			create_table_query1 = '''CREATE TABLE trackers(
 USER_ID	BIGINT,
@@ -32,7 +32,7 @@ TOPIC	TEXT,
 ARTICLE	INT,
 MODES	TEXT,
 BIRTHDAY	TEXT,
-CURR	TEXT
+CURR	TEXT,
 STOCKS	TEXT);'''
 			self.cursor.execute(create_table_query1)
 			self.conn.commit()
